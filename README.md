@@ -1,3 +1,14 @@
+
+# TO DO
+
+[] Redo this Readme
+[] Maybe better hotel/fligth search?
+[] Time and space aware planning? - Timestamps in memories?
+[] Better memory management?
+
+
+
+
 # 🌍 Autogen Travel Concierge 
 
 A sophisticated AI travel planning assistant showcasing AutoGen's advanced memory capabilities with dual-layer memory architecture: Redis-backed chat history and Mem0 based long term memory that remembers user preferences.
