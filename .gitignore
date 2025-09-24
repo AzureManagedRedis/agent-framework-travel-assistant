@@ -1,0 +1,8 @@
+__pycache__/
+.venv/
+.env
+*.ipynb
+context/logs/*
+context/users/*
+memory_bank/*
+assets/calendars/*

@@ -1,0 +1,503 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono&display=swap');
+
+/* Redis Color Variables */
+:root {
+    --white: #FFFFFF;
+    --redis-red: #FF4438;
+    --black: #000000;
+    --black-90p: #191919;
+    --black-70p: #4c4c4c;
+    --black-50p: #808080;
+    --black-30p: #B2B2B2;
+    --black-10p: #E5E5E5;
+    --light-gray: #F0F0F0;
+    --midnight: #091A23;
+    --dusk: #163341;
+    --dusk-90p: #2D4754;
+    --dusk-70p: #5C707A;
+    --dusk-50p: #8A99A0;
+    --dusk-30p: #B9C2C6;
+    --dusk-10p: #E8EBEC;
+    --violet: #C795E3;
+    --violet-50p: #E3CAF1;
+    --violet-10p: #F9F4FC;
+    --sky-blue: #80DBFF;
+    --sky-blue-50p: #BFEDFF;
+    --sky-blue-10p: #F2FBFF;
+    --yellow: #DCFF1E;
+    --yellow-40p: #F1FFA5;
+    --yellow-10p: #FBFFE8;
+}
+
+/* Global styling */
+.gradio-container {
+    max-width: 1200px !important;
+    min-width: 800px !important;
+    margin: auto !important;
+    background-color: var(--midnight) !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    color: var(--white) !important;
+}
+
+body {
+    background-color: var(--midnight) !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    color: var(--white) !important;
+}
+
+/* Main layout containers */
+.main-container {
+    display: flex !important;
+    height: 80vh !important;
+    min-height: 600px !important;
+    gap: 24px !important;
+    background-color: var(--midnight) !important;
+}
+
+.chat-panel {
+    flex: 2 !important;
+    background-color: var(--midnight) !important;
+    border: 1px solid var(--dusk-70p) !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    padding: 20px !important;
+}
+
+.memory-panel {
+    flex: 1 !important;
+    background-color: var(--dusk) !important;
+    border: 1px solid var(--dusk-70p) !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+
+/* Chat container */
+.chat-container {
+    height: 100% !important;
+    background-color: var(--midnight) !important;
+}
+
+.chatbot-scrollable {
+    flex: 1 !important;
+    min-height: 400px !important;
+    max-height: calc(80vh - 300px) !important;
+    background-color: var(--midnight) !important;
+    overflow-y: auto !important;
+    scroll-behavior: smooth !important;
+}
+
+#component-0 {
+    height: 100% !important;
+    background-color: var(--midnight) !important;
+}
+
+/* Resizable splitter */
+.resizer {
+    width: 6px !important;
+    background: var(--dusk-70p) !important;
+    cursor: col-resize !important;
+    transition: background-color 0.3s ease !important;
+}
+
+.resizer:hover {
+    background: var(--violet) !important;
+}
+
+/* Chatbot styling */
+.chatbot {
+    background-color: var(--midnight) !important;
+    border: none !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+    flex: 1 !important;
+}
+
+/* Ensure chatbot messages container is scrollable */
+.chatbot .wrap {
+    height: 100% !important;
+    overflow-y: auto !important;
+    padding: 0 !important;
+}
+
+/* Auto-scroll to bottom styling */
+.chatbot .messages {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    padding: 0 !important;
+}
+
+/* Message styling */
+.message.user {
+    background-color: var(--dusk-90p) !important;
+    color: var(--white) !important;
+    border: none !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    border-radius: 16px !important;
+    padding: 16px !important;
+    margin: 8px 0 !important;
+}
+
+.message.bot {
+    background-color: var(--dusk) !important;
+    color: var(--white) !important;
+    border: none !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    border-radius: 16px !important;
+    padding: 16px !important;
+    margin: 8px 0 !important;
+}
+
+/* Input field styling */
+.gr-textbox textarea, .gr-textbox input {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+    border: 1px solid var(--dusk-50p) !important;
+    border-radius: 8px !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-size: 14px !important;
+}
+
+.gr-textbox textarea:focus, .gr-textbox input:focus {
+    border-color: var(--violet) !important;
+    box-shadow: 0 0 0 2px rgba(199, 149, 227, 0.2) !important;
+    outline: none !important;
+}
+
+/* Button styling */
+.gr-button {
+    font-family: 'Space Grotesk', sans-serif !important;
+    transition: all 0.2s ease !important;
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+}
+
+.gr-button.primary {
+    background-color: var(--violet) !important;
+    border: none !important;
+    color: var(--white) !important;
+    padding: 12px 24px !important;
+}
+
+.gr-button.primary:hover {
+    background-color: var(--violet-50p) !important;
+    transform: translateY(-1px) !important;
+}
+
+.gr-button.secondary {
+    background-color: var(--dusk-70p) !important;
+    color: var(--white) !important;
+    border: none !important;
+    padding: 8px 16px !important;
+}
+
+.gr-button.secondary:hover {
+    background-color: var(--dusk-50p) !important;
+}
+
+/* Accordion styling */
+.gr-accordion {
+    background-color: var(--dusk) !important;
+    border: 1px solid var(--dusk-70p) !important;
+}
+
+.gr-accordion .label-wrap {
+    background-color: var(--dusk) !important;
+    color: var(--white) !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+}
+
+.gr-accordion .label-wrap:hover {
+    color: var(--violet) !important;
+}
+
+/* Examples styling */
+.gr-examples .examples {
+    background-color: var(--dusk) !important;
+}
+
+.gr-examples .example {
+    background-color: var(--dusk-90p) !important;
+    color: var(--white) !important;
+    border: 1px solid var(--dusk-70p) !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+}
+
+.gr-examples .example:hover {
+    background-color: var(--violet) !important;
+    border-color: var(--violet) !important;
+}
+
+/* Header text styling */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--white) !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-weight: 500 !important;
+}
+
+/* Panel and container backgrounds */
+.gr-panel, .gr-box, .gr-form {
+    background-color: var(--dusk) !important;
+    border: 1px solid var(--dusk-70p) !important;
+}
+
+/* Markdown content */
+.gr-markdown {
+    color: var(--white) !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+}
+
+.gr-markdown p, .gr-markdown li {
+    color: var(--white) !important;
+}
+
+.gr-markdown strong {
+    color: var(--yellow) !important;
+}
+
+.gr-markdown code {
+    background-color: var(--dusk-90p) !important;
+    color: var(--sky-blue) !important;
+    font-family: 'Space Mono', monospace !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--dusk);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--dusk-70p);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--violet);
+}
+
+/* Specific scrollbar styling for chatbot */
+.chatbot::-webkit-scrollbar,
+.chatbot .wrap::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chatbot::-webkit-scrollbar-track,
+.chatbot .wrap::-webkit-scrollbar-track {
+    background: var(--midnight);
+}
+
+.chatbot::-webkit-scrollbar-thumb,
+.chatbot .wrap::-webkit-scrollbar-thumb {
+    background: var(--dusk-70p);
+    border-radius: 3px;
+}
+
+.chatbot::-webkit-scrollbar-thumb:hover,
+.chatbot .wrap::-webkit-scrollbar-thumb:hover {
+    background: var(--yellow);
+}
+
+
+
+
+
+/* Final override: selected user shows purple border only (no background change) */
+.user-selector [aria-checked="true"],
+.user-selector .selected,
+.user-selector input[type="radio"]:checked + label {
+    border-color: var(--violet) !important;
+    box-shadow: 0 0 0 2px var(--violet) !important;
+    background-color: var(--dusk-90p) !important;
+    color: var(--white) !important;
+}
+
+/* Memory panel specific styling */
+.memory-content {
+    height: 100% !important;
+    overflow-y: auto !important;
+    padding: 20px !important;
+    background-color: var(--dusk) !important;
+}
+
+.memory-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.memory-content::-webkit-scrollbar-track {
+    background: var(--dusk-90p);
+}
+
+.memory-content::-webkit-scrollbar-thumb {
+    background: var(--violet);
+    border-radius: 3px;
+}
+
+/* Force Gradio rows to stay horizontal on desktop */
+.gradio-container .block.gradio-row {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 20px !important;
+}
+
+.gradio-container .block.gradio-column {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 480px) {
+    .main-container {
+        flex-direction: column !important;
+        height: auto !important;
+        gap: 16px !important;
+    }
+    
+    .gradio-container .block.gradio-row {
+        flex-direction: column !important;
+    }
+    
+    .memory-panel {
+        flex: none !important;
+        order: -1 !important;
+    }
+    
+    .memory-content {
+        height: 200px !important;
+    }
+}
+
+/* Improve spacing and layout */
+.gradio-container .app {
+    max-width: 100% !important;
+    padding: 0 20px !important;
+}
+
+/* Loading state animations */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Button loading states */
+.gr-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.gr-button.loading {
+    position: relative;
+    color: transparent !important;
+}
+
+.gr-button.loading::after {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    left: 50%;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Improved message appearance for system messages */
+.chatbot .message.system {
+    background: linear-gradient(135deg, var(--dusk-70p) 0%, var(--dusk-50p) 100%) !important;
+    border-left: 4px solid var(--yellow) !important;
+    font-style: italic;
+    opacity: 0.9;
+}
+
+
+
+/* Simple thinking animation for dots */
+.thinking-animation {
+    animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+    0%, 60%, 100% {
+        opacity: 1;
+    }
+    30% {
+        opacity: 0.3;
+    }
+}
+
+/* Segmented control centering */
+.user-selector-container { justify-content: center !important; }
+
+
+
+/* Events panel styling */
+.event-card {
+    background: #0e2631;
+    border: 1px solid #264a5a;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 8px 0;
+}
+
+.event-title {
+    color: #dcff1e;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.event-meta {
+    color: #8a99a0;
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.event-message {
+    color: #ffffff;
+    font-size: 12px;
+    margin-top: 6px;
+    white-space: pre-wrap;
+}/* Make Agent Logs panel scrollable similar to chat */
+#events-panel {
+    max-height: 500px !important;
+    overflow-y: auto !important;
+}
+
+/* Calendar status message styling */
+.calendar-status {
+    background-color: var(--dusk) !important;
+    border: 1px solid var(--violet) !important;
+    color: var(--white) !important;
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+    margin-top: 8px !important;
+    border-radius: 6px !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+}
+
+.calendar-status[value*="✅"] {
+    border-color: var(--yellow) !important;
+    background-color: rgba(220, 255, 30, 0.1) !important;
+}
+
+.calendar-status[value*="❌"] {
+    border-color: var(--redis-red) !important;
+    background-color: rgba(255, 68, 56, 0.1) !important;
+}
+
+

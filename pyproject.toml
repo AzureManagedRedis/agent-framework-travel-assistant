@@ -1,0 +1,24 @@
+[project]
+name = "amr-autogen-travel-agent"
+version = "0.1.0"
+description = "Azure Managed Redis + AutoGen multi-agent demo with STM/LTM, Tavily search, ICS export, and Gradio UI."
+requires-python = ">=3.11,<3.13"
+
+dependencies = [
+  "autogen-agentchat",
+  "autogen-ext[azure,openai,redisvl,mem0]",
+  "redis>=5.0.0",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.0",
+  "python-dotenv>=1.0",
+  "azure-identity>=1.17",
+  "openai>=1.40.0",
+  "tavily-python>=0.5.0",
+  "httpx>=0.27",
+  "gradio>=4.44.0",
+  "typing-extensions>=4.0.0",
+  "redisvl==0.8.2",
+  "agent-framework-project @ file:///Users/han.choong/Desktop/projects/agent-framework/python",
+
+  "ics>=0.7.2",
+]
