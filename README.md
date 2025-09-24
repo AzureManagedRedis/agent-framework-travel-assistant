@@ -1,10 +1,10 @@
 
 # TO DO
 
-[ ] Redo this Readme
-[ ] Maybe better hotel/fligth search?
-[ ] Time and space aware planning? - Timestamps in memories?
-[ ] Better memory management?
+1. Redo this Readme
+2. Maybe better hotel/fligth search?
+3. Time and space aware planning? - Timestamps in memories?
+4. Better memory management?
 
 
 
