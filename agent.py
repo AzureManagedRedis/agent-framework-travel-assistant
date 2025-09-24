@@ -703,13 +703,13 @@ class TravelAgent:
         Uses Agent Framework middleware to robustly detect and tag events on streaming updates.
         """
         # ------------------------------
-        # Capture print() output as live UI events (start early to include agent creation logs)
+        # Capture stdout/stderr prints as live UI events (start early)
         # ------------------------------
         log_queue: asyncio.Queue[str | None] = asyncio.Queue()
 
-        class _StdoutTee:
-            def __init__(self, original_stdout, queue: asyncio.Queue[str | None]):
-                self._original = original_stdout
+        class _StreamTee:
+            def __init__(self, original_stream, queue: asyncio.Queue[str | None]):
+                self._original = original_stream
                 self._queue = queue
                 self._buffer = ""
 
@@ -737,7 +737,9 @@ class TravelAgent:
                     pass
 
         original_stdout = sys.stdout
-        sys.stdout = _StdoutTee(original_stdout, log_queue)  # type: ignore[assignment]
+        original_stderr = sys.stderr
+        sys.stdout = _StreamTee(original_stdout, log_queue)  # type: ignore[assignment]
+        sys.stderr = _StreamTee(original_stderr, log_queue)  # type: ignore[assignment]
 
         ctx = self._get_or_create_user_ctx(user_id)
 
@@ -858,8 +860,6 @@ class TravelAgent:
         stream = ctx.agent.run_stream(messages=user_message, middleware=[_ui_events_middleware])
 
         buffer = ""
-        last_yielded = ""
-        llm_call_index = 0
         yield buffer, _event("user_message", "", "User message sent", f'"{user_message}"')
 
         # Emit context retrieval/submission info similar to ChatAgent.run_stream
@@ -891,133 +891,163 @@ class TravelAgent:
         try:
             yield buffer, _event("llm_response_start", "", "LLM thinking", f"LLM receives user input")
 
-            # Drive both the underlying agent stream and the captured tool prints concurrently
-            stream_iter = stream.__aiter__()
-            next_update_task: asyncio.Task | None = None
-            next_log_task: asyncio.Task | None = None
-            stream_finished = False
-            logs_finished = False
+            # Queues to multiplex text updates and UI events
+            text_queue: asyncio.Queue[str | None] = asyncio.Queue()
+            event_queue: asyncio.Queue[dict | None] = asyncio.Queue()
+            stream_error: ServiceResponseException | None = None
 
-            def _ensure_tasks():
-                nonlocal next_update_task, next_log_task
-                if not stream_finished and next_update_task is None:
-                    next_update_task = asyncio.create_task(stream_iter.__anext__())
-                if not logs_finished and next_log_task is None:
-                    next_log_task = asyncio.create_task(log_queue.get())
+            async def _consume_stream() -> None:
+                try:
+                    async for update in stream:  # type: ignore[misc]
+                        # Forward annotated UI events if present
+                        try:
+                            addl = getattr(update, "additional_properties", None) or {}
+                            for e in list(addl.get("ui_events", [])):
+                                try:
+                                    await event_queue.put(dict(e))
+                                except Exception:
+                                    continue
+                        except Exception:
+                            pass
 
-            while not (stream_finished and logs_finished):
-                _ensure_tasks()
-                pending: set[asyncio.Task] | None
-                done, pending = await asyncio.wait(
-                    {t for t in (next_update_task, next_log_task) if t is not None},
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                
-                # Handle completed tasks
-                if next_log_task in done:
-                    try:
-                        line = next_log_task.result()
-                    except Exception:
-                        line = None
-                    next_log_task = None
-                    if line is None:
-                        logs_finished = True
-                    else:
-                        # Emit a UI event for the printed line from tools
+                        # Forward text chunk
+                        try:
+                            chunk_text = getattr(update, "text", "") or ""
+                        except Exception:
+                            chunk_text = ""
+                        if chunk_text:
+                            nonlocal buffer
+                            buffer += chunk_text
+                            await text_queue.put(buffer + ' <span class="thinking-animation">●●●</span>')
+                except ServiceResponseException as sre:
+                    nonlocal stream_error
+                    stream_error = sre
+                finally:
+                    await text_queue.put(None)
+
+            async def _consume_logs() -> None:
+                try:
+                    while True:
+                        line = await log_queue.get()
+                        if line is None:
+                            break
                         try:
                             display_line = str(line)
                         except Exception:
                             display_line = ""
                         if display_line:
-                            yield buffer, {
+                            await event_queue.put({
                                 "type": "tool_log",
                                 "html": _html("", "", display_line),
-                            }
+                            })
+                finally:
+                    await event_queue.put(None)
 
-                if next_update_task in done:
+            # Start consumers
+            stream_task = asyncio.create_task(_consume_stream())
+            logs_task = asyncio.create_task(_consume_logs())
+
+            text_done = False
+            events_done = False
+            logs_shutdown_sent = False
+            next_text_task: asyncio.Task | None = None
+            next_event_task: asyncio.Task | None = None
+
+            # Drain both queues, yielding as soon as items arrive
+            while not (text_done and events_done):
+                if not text_done and next_text_task is None:
+                    next_text_task = asyncio.create_task(text_queue.get())
+                if not events_done and next_event_task is None:
+                    next_event_task = asyncio.create_task(event_queue.get())
+
+                done, _ = await asyncio.wait(
+                    {t for t in (next_text_task, next_event_task) if t is not None},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+
+                if next_text_task in done:
                     try:
-                        update = next_update_task.result()
-                        next_update_task = None
-                    except StopAsyncIteration:
-                        stream_finished = True
-                        next_update_task = None
-                        # Stop capturing further prints and signal completion after draining
-                        try:
-                            sys.stdout = original_stdout  # type: ignore[assignment]
-                        except Exception:
-                            pass
-                        try:
-                            await asyncio.sleep(0)  # let any final writes flush
-                        except Exception:
-                            pass
-                        try:
-                            await log_queue.put(None)
-                        except Exception:
-                            logs_finished = True
-                        continue
-                    except ServiceResponseException as sre:
-                        # Restore stdout capture before fallback
-                        try:
-                            sys.stdout = original_stdout  # type: ignore[assignment]
-                        except Exception:
-                            pass
-                        # Propagate to outer except to trigger fallback handling
-                        raise sre
-                    except Exception:
-                        # Unexpected error: stop capture and re-raise
-                        try:
-                            sys.stdout = original_stdout  # type: ignore[assignment]
-                        except Exception:
-                            pass
-                        raise
+                        item = next_text_task.result()
+                    finally:
+                        next_text_task = None
+                    if item is None:
+                        text_done = True
+                        if not logs_shutdown_sent:
+                            # End log capture and let logs consumer flush and terminate
+                            try:
+                                sys.stdout = original_stdout  # type: ignore[assignment]
+                                sys.stderr = original_stderr  # type: ignore[assignment]
+                            except Exception:
+                                pass
+                            try:
+                                await asyncio.sleep(0)
+                            except Exception:
+                                pass
+                            try:
+                                await log_queue.put(None)
+                            except Exception:
+                                pass
+                            logs_shutdown_sent = True
+                    else:
+                        yield item, None
 
-                    # Process stream update (text and annotated UI events)
+                if next_event_task in done:
                     try:
-                        chunk_text = getattr(update, "text", "") or ""
-                    except Exception:
-                        chunk_text = ""
+                        item = next_event_task.result()
+                    finally:
+                        next_event_task = None
+                    if item is None:
+                        events_done = True
+                    else:
+                        yield buffer, item
 
-                    if chunk_text:
-                        buffer += chunk_text
-                        if buffer != last_yielded:
-                            last_yielded = buffer
-                            yield buffer + ' <span class="thinking-animation">●●●</span>', None
+            # Ensure background tasks are finished
+            try:
+                await asyncio.gather(stream_task, logs_task)
+            except Exception:
+                pass
 
-                    # # Handle annotated UI events from middleware
-                    # try:
-                    #     ui_events = (getattr(update, "additional_properties", {}) or {}).get("ui_events", [])
-                    # except Exception:
-                    #     ui_events = []
-                    # for ev in ui_events:
-                    #     ev_type = ev.get("type")
-                    #     if ev_type == "llm_token_stream_start":
-                    #         llm_call_index += 1
-                    #         yield buffer, _event("llm_token_stream_start", "⏳", f"LLM #{llm_call_index}: streaming", "")
-                    #     elif ev_type == "tool_call":
-                    #         tool_name = ev.get("tool_name") or "tool"
-                    #         icon = "🔧"
-                    #         title = f"Calling {tool_name}"
-                    #         if "search_logistics" in tool_name:
-                    #             icon = "✈️"; title = "Searching logistics"
-                    #             yield buffer, _event("tool_call", icon, title, f"Invoking {tool_name}")
-                    #         elif "search_general" in tool_name:
-                    #             icon = "📍"; title = "Searching (general)"
-                    #             yield buffer, _event("tool_call", icon, title, f"Invoking {tool_name}")
-                    #         elif "generate_calendar_ics" in tool_name:
-                    #             icon = "📅"; title = "Generating calendar"
-                    #             yield buffer, _event("tool_call", icon, title, f"Invoking {tool_name}")
-                    #     elif ev_type == "tool_result":
-                    #         tool_name = ev.get("tool_name") or "Tool"
-                    #         file_path = ev.get("file_path")
-                    #         icon = "📅" if file_path else "✅"
-                    #         event_data = {
-                    #             "type": "tool_result",
-                    #             "html": _html(icon, f"{tool_name} finished", "Tool execution completed"),
-                    #             "tool_name": tool_name,
-                    #         }
-                    #         if file_path:
-                    #             event_data["file_path"] = file_path
-                    #         yield buffer, event_data
+            # If the streaming failed due to tool-call ordering, run non-streaming fallback
+            if stream_error is not None:
+                try:
+                    result = await ctx.agent.run(messages=user_message)
+                    final_text = ""
+                    file_path = None
+                    for m in getattr(result, "messages", []) or []:
+                        try:
+                            if getattr(m, "role", None) == Role.ASSISTANT and getattr(m, "contents", None):
+                                for c in m.contents:
+                                    if isinstance(c, TextContent) and getattr(c, "text", None):
+                                        final_text += c.text
+                            if getattr(m, "role", None) == Role.TOOL and getattr(m, "contents", None):
+                                for c in m.contents:
+                                    if isinstance(c, FunctionResultContent):
+                                        rc = getattr(c, "result", None)
+                                        if isinstance(rc, dict) and rc.get("file_path"):
+                                            file_path = rc.get("file_path")
+                                        elif isinstance(rc, str):
+                                            try:
+                                                data = json.loads(rc)
+                                                if isinstance(data, dict) and data.get("file_path"):
+                                                    file_path = data.get("file_path")
+                                            except Exception:
+                                                pass
+                        except Exception:
+                            continue
+
+                    if final_text:
+                        buffer = final_text
+                        yield buffer, None
+                    if file_path:
+                        yield buffer, {
+                            "type": "tool_result",
+                            "html": _html("📅", "generate_calendar_ics finished", "Tool execution completed"),
+                            "tool_name": "generate_calendar_ics",
+                            "file_path": file_path,
+                        }
+                except Exception:
+                    # Re-raise the original to be handled by caller if fallback also fails
+                    raise stream_error
 
         except ServiceResponseException as sre:
             # Handle OpenAI tool-call ordering error by falling back to non-streaming

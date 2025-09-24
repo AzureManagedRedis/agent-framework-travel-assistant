@@ -11,6 +11,15 @@ A travel planning assistant with dual-layer memory: Redis-backed chat history an
 - **Gradio UI**: Chat, user tabs, live agent event logs, clear‑chat control
 - **Configurable**: Pydantic settings via environment variables, `.env` support
 
+## Recommended Demo Flow
+
+Try the following query flow to test the agent!
+1. Can you recommend things to do in Lisbon based on online opinion?
+2. Can you find a flight leaving on the 14th of January 2026 and returning on the 16th?
+3. How about a hotel for the stay? 
+4. Okay, put together an itinerary and give me a calendar.
+5. Click the Open Calendar button to add the routine to your schedule!
+
 ## 🧩 Architecture overview
 - `gradio_app.py`: Launches the Gradio app, builds UI, wires event streaming, calendar open, and user switching
 - `agent.py`: Implements `TravelAgent` using Agent Framework
@@ -34,7 +43,7 @@ Provide via your environment or a `.env` file in the project root. Minimum requi
 
 Recommended/optional overrides (defaults shown):
 - `TRAVEL_AGENT_MODEL` = `gpt-4o-mini`
-- `MEM0_MODEL` = `gpt-4o-mini`
+- `MEM0_MODEL` = `gpt-5-nano`
 - `MEM0_EMBEDDING_MODEL` = `text-embedding-3-small`
 - `MEM0_EMBDDING_MODEL_DIMS` = `1536`
 - `REDIS_URL` = `redis://localhost:6379`
@@ -51,7 +60,7 @@ TAVILY_API_KEY=...
 MEM0_API_KEY=...
 REDIS_URL=redis://localhost:6379
 TRAVEL_AGENT_MODEL=gpt-4o-mini
-MEM0_MODEL=gpt-4o-mini
+MEM0_MODEL=gpt-5-nano
 MEM0_EMBEDDING_MODEL=text-embedding-3-small
 MEM0_EMBDDING_MODEL_DIMS=1536
 MAX_CHAT_HISTORY_SIZE=6
