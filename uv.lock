@@ -319,13 +319,11 @@ wheels = [
 ]
 
 [[package]]
-name = "amr-autogen-travel-agent"
+name = "amr-af-travel-agent"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "agent-framework-project" },
-    { name = "autogen-agentchat" },
-    { name = "autogen-ext", extra = ["azure", "mem0", "openai", "redisvl"] },
     { name = "azure-identity" },
     { name = "gradio" },
     { name = "httpx" },
@@ -343,8 +341,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "agent-framework-project", directory = "../../agent-framework/python" },
-    { name = "autogen-agentchat" },
-    { name = "autogen-ext", extras = ["azure", "openai", "redisvl", "mem0"] },
     { name = "azure-identity", specifier = ">=1.17" },
     { name = "gradio", specifier = ">=4.44.0" },
     { name = "httpx", specifier = ">=0.27" },
@@ -423,67 +419,6 @@ wheels = [
 ]
 
 [[package]]
-name = "autogen-agentchat"
-version = "0.7.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "autogen-core" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/45/dc/9490b4ab8d3984a40daa9bbd5dc50b240dba149053917351ff18935901fe/autogen_agentchat-0.7.2.tar.gz", hash = "sha256:5c7eb62d6fb32dd05a162318dc707af9ee7f3d3c33b2bb20f6e2557782271c80", size = 147023, upload-time = "2025-08-07T00:27:31.997Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3f/39/9df1f22b437ee8fe64c49857a79e686d3310c1cce0125c124e10c3563ce7/autogen_agentchat-0.7.2-py3-none-any.whl", hash = "sha256:d77c78e78aab02fb0088380a97195f2495850b61884ec1a32a7e1ec53a981896", size = 119090, upload-time = "2025-08-07T00:27:30.609Z" },
-]
-
-[[package]]
-name = "autogen-core"
-version = "0.7.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "jsonref" },
-    { name = "opentelemetry-api" },
-    { name = "pillow" },
-    { name = "protobuf" },
-    { name = "pydantic" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/3e/cc/c249904c164a0be1d67b486a36e27aa7d9c877ff0300bd086d6656a5b171/autogen_core-0.7.2.tar.gz", hash = "sha256:66fe2f46d5d188a88ada90863371b341a8572778d22fe481bf63fb699a3940c8", size = 99834, upload-time = "2025-08-07T00:27:24.903Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/c1/bcf9d6fc0f2cf9f75093b48e0859ec31a7be69cc2118655bfaf1dbc8ecda/autogen_core-0.7.2-py3-none-any.whl", hash = "sha256:a4096c2e3cd889cf16bbdecae0d2b5cbd67d896349be2d33dbdeca56b924b400", size = 101405, upload-time = "2025-08-07T00:27:23.464Z" },
-]
-
-[[package]]
-name = "autogen-ext"
-version = "0.7.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "autogen-core" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ae/b0/67b80ecb0abd65daad204581029d644b8e13b9b32bc3daa5fa0355e452e9/autogen_ext-0.7.2.tar.gz", hash = "sha256:46800a8052b19d47e09fd5052eceecfca8719662baba87717563d9ac6187d9ca", size = 408047, upload-time = "2025-08-07T00:27:33.739Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/65/905e9bef275f2f376644f70926dd898c1fff12697fdb3d8918c2b34ccd49/autogen_ext-0.7.2-py3-none-any.whl", hash = "sha256:d039ce220eda87b4aa8a7c83b263dfba1dd8f7067ed958fa872d54e54fb3f782", size = 330921, upload-time = "2025-08-07T00:27:31.867Z" },
-]
-
-[package.optional-dependencies]
-azure = [
-    { name = "azure-ai-inference" },
-    { name = "azure-ai-projects" },
-    { name = "azure-core" },
-    { name = "azure-identity" },
-    { name = "azure-search-documents" },
-]
-mem0 = [
-    { name = "mem0ai" },
-]
-openai = [
-    { name = "aiofiles" },
-    { name = "openai" },
-    { name = "tiktoken" },
-]
-redisvl = [
-    { name = "redisvl" },
-]
-
-[[package]]
 name = "azure-ai-agents"
 version = "1.2.0b4"
 source = { registry = "https://pypi.org/simple" }
@@ -495,20 +430,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/30/db/cdf0ab3cf642ef766d193fadfee4cc8e70867a051c800f9e1091feb76337/azure_ai_agents-1.2.0b4.tar.gz", hash = "sha256:3da41c0f17282dd76bff7d370c714ef2d17140a119a1eb88d8653311835bbe85", size = 383620, upload-time = "2025-09-13T02:04:47.301Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3c/08/571e60c5f76c3ba20e6a99de636335e2480941816344dfad971a2e362c12/azure_ai_agents-1.2.0b4-py3-none-any.whl", hash = "sha256:8cfc4cd19d7d2087858148eba8b9b424a5d30fafbda87ca2d12ea5a066bec051", size = 214705, upload-time = "2025-09-13T02:04:49.171Z" },
-]
-
-[[package]]
-name = "azure-ai-inference"
-version = "1.0.0b9"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "azure-core" },
-    { name = "isodate" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4e/6a/ed85592e5c64e08c291992f58b1a94dab6869f28fb0f40fd753dced73ba6/azure_ai_inference-1.0.0b9.tar.gz", hash = "sha256:1feb496bd84b01ee2691befc04358fa25d7c344d8288e99364438859ad7cd5a4", size = 182408, upload-time = "2025-02-15T00:37:28.464Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4f/0f/27520da74769db6e58327d96c98e7b9a07ce686dff582c9a5ec60b03f9dd/azure_ai_inference-1.0.0b9-py3-none-any.whl", hash = "sha256:49823732e674092dad83bb8b0d1b65aa73111fab924d61349eb2a8cdc0493990", size = 124885, upload-time = "2025-02-15T00:37:29.964Z" },
 ]
 
 [[package]]
@@ -525,15 +446,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/dd/95/9c04cb5f658c7f856026aa18432e0f0fa254ead2983a3574a0f5558a7234/azure_ai_projects-1.0.0.tar.gz", hash = "sha256:b5f03024ccf0fd543fbe0f5abcc74e45b15eccc1c71ab87fc71c63061d9fd63c", size = 130798, upload-time = "2025-07-31T02:09:27.912Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b5/db/7149cdf71e12d9737f186656176efc94943ead4f205671768c1549593efe/azure_ai_projects-1.0.0-py3-none-any.whl", hash = "sha256:81369ed7a2f84a65864f57d3fa153e16c30f411a1504d334e184fb070165a3fa", size = 115188, upload-time = "2025-07-31T02:09:29.362Z" },
-]
-
-[[package]]
-name = "azure-common"
-version = "1.1.28"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/3e/71/f6f71a276e2e69264a97ad39ef850dca0a04fce67b12570730cb38d0ccac/azure-common-1.1.28.zip", hash = "sha256:4ac0cd3214e36b6a1b6a442686722a5d8cc449603aa833f3f0f40bda836704a3", size = 20914, upload-time = "2022-02-03T19:39:44.373Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/62/55/7f118b9c1b23ec15ca05d15a578d8207aa1706bc6f7c87218efffbbf875d/azure_common-1.1.28-py2.py3-none-any.whl", hash = "sha256:5c12d3dcf4ec20599ca6b0d3e09e86e146353d443e7fcc050c9a19c1f9df20ad", size = 14462, upload-time = "2022-02-03T19:39:42.417Z" },
 ]
 
 [[package]]
@@ -618,21 +530,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d6/d9/ed8c3a4ad8ae2ab8745d940305ca8ec41208dfdefa6a7a232ab62ffe40a3/azure_monitor_opentelemetry_exporter-1.0.0b42.tar.gz", hash = "sha256:d35b60e0404446932e31e3a0b1c2202e47e9b78f91bb24110bd164aa62c5bb87", size = 245626, upload-time = "2025-09-16T23:50:16.457Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/86/c9/d6050a53565f3653205fad79d53982411530b80a72ee1352110c0c0cd0fe/azure_monitor_opentelemetry_exporter-1.0.0b42-py2.py3-none-any.whl", hash = "sha256:649d8a634c119ae942d2dd20ff3006dda88050d3c7044b09bd5111e66439833e", size = 183324, upload-time = "2025-09-16T23:50:18.32Z" },
-]
-
-[[package]]
-name = "azure-search-documents"
-version = "11.5.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "azure-common" },
-    { name = "azure-core" },
-    { name = "isodate" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/fd/11/9ecde2bd9e6c00cc0e3f312ab096a33d333f8ba40c847f01f94d524895fe/azure_search_documents-11.5.3.tar.gz", hash = "sha256:6931149ec0db90485d78648407f18ea4271420473c7cb646bf87790374439989", size = 300353, upload-time = "2025-06-25T16:48:58.924Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4b/f5/0f6b52567cbb33f1efba13060514ed7088a86de84d74b77cda17d278bcd9/azure_search_documents-11.5.3-py3-none-any.whl", hash = "sha256:110617751c6c8bd50b1f0af2b00a478bd4fbaf4e2f0387e3454c26ec3eb433d6", size = 298772, upload-time = "2025-06-25T16:49:00.764Z" },
 ]
 
 [[package]]
@@ -1309,15 +1206,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/6d/86/08646239a313f895186ff0a4573452038eed8c86f54380b3ebac34d32fb2/jsonpath-ng-1.7.0.tar.gz", hash = "sha256:f6f5f7fd4e5ff79c785f1573b394043b39849fb2bb47bcead935d12b00beab3c", size = 37838, upload-time = "2024-10-11T15:41:42.404Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/35/5a/73ecb3d82f8615f32ccdadeb9356726d6cae3a4bbc840b437ceb95708063/jsonpath_ng-1.7.0-py3-none-any.whl", hash = "sha256:f3d7f9e848cba1b6da28c55b1c26ff915dc9e0b1ba7e752a53d6da8d5cbd00b6", size = 30105, upload-time = "2024-11-20T17:58:30.418Z" },
-]
-
-[[package]]
-name = "jsonref"
-version = "1.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/aa/0d/c1f3277e90ccdb50d33ed5ba1ec5b3f0a242ed8c1b1a85d3afeb68464dca/jsonref-1.1.0.tar.gz", hash = "sha256:32fe8e1d85af0fdefbebce950af85590b22b60f9e95443176adbde4e1ecea552", size = 8814, upload-time = "2023-01-16T16:10:04.455Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0c/ec/e1db9922bceb168197a558a2b8c03a7963f1afe93517ddd3cf99f202f996/jsonref-1.1.0-py3-none-any.whl", hash = "sha256:590dc7773df6c21cbf948b5dac07a72a251db28b0238ceecce0a2abfa8ec30a9", size = 9425, upload-time = "2023-01-16T16:10:02.255Z" },
 ]
 
 [[package]]

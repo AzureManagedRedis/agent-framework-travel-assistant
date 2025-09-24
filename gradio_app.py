@@ -1,3 +1,12 @@
+"""Gradio UI for the AI Travel Concierge built on the agent framework.
+
+This module wires together the `TravelAgent` with a custom-styled Gradio app.
+It provides:
+- A chat interface with streaming assistant responses
+- An events side panel showing tool calls/results as compact cards
+- User profile switching (based on `context/seed.json`)
+- Calendar (.ics) open/folder helpers for macOS/Windows/Linux
+"""
 import warnings
 warnings.filterwarnings("ignore")
 import asyncio

@@ -1,4 +1,13 @@
 # import suppress_warnings  # Must be first to suppress warnings
+"""Travel assistant agent integrating Mem0 long-term memory, Redis-backed chat
+history, Tavily web search, and simple calendar (.ics) generation.
+
+This module defines the `TravelAgent` used by the Gradio UI:
+- Per-user memory via Mem0 with Redis storage and retrieval
+- Two scoped web search tools (logistics vs general) powered by Tavily
+- A small sanitizer wrapper for OpenAI tool-call message ordering
+- Streaming chat utilities that surface structured UI events for the side panel
+"""
 import warnings
 warnings.filterwarnings("ignore")
 import os
@@ -33,10 +42,18 @@ from config import AppConfig
 
 
 class _SanitizingChatMessageStore:
-    """Wrapper store that sanitizes history for OpenAI tool message ordering.
+    """Wrapper for `RedisChatMessageStore` that enforces OpenAI tool-call ordering.
 
-    - Drops leading Role.TOOL messages.
-    - Removes FunctionResultContent whose call_id has no preceding assistant FunctionCallContent.
+    Why this exists
+    OpenAI expects any tool (role="tool") messages to be preceded by an
+    assistant message that declared the corresponding tool call(s). Some SDKs and
+    UIs may write tool results without the matching assistant call IDs, which can
+    cause API errors. This wrapper sanitizes history to avoid that.
+
+    Behavior
+    - Drops leading tool-role messages.
+    - Filters tool results (`FunctionResultContent`) whose `call_id` does not
+      match any prior assistant `FunctionCallContent` in the conversation.
     """
 
     def __init__(self, inner_store: RedisChatMessageStore) -> None:
@@ -56,6 +73,7 @@ class _SanitizingChatMessageStore:
         await self._inner.deserialize_state(serialized_store_state, **kwargs)
 
     def _sanitize_messages(self, messages: List[ChatMessage]) -> List[ChatMessage]:
+        """Return messages pruned to a sequence valid for OpenAI tool-calls."""
         if not messages:
             return []
 
@@ -108,7 +126,7 @@ class _SanitizingChatMessageStore:
 @dataclass
 class UserCtx:
     """User-specific context containing Mem0 provider and agent instances.
-    
+
     Attributes:
         mem0_provider: Mem0 provider instance for user-specific memory management
         agent: Main chat agent with tools and memory integration
@@ -119,22 +137,22 @@ class UserCtx:
 
 class TravelAgent:
     """Travel planning agent with Mem0-powered personalized memory capabilities.
-    
+
     This agent provides personalized travel planning services by maintaining
-    separate Mem0 memory contexts for each user. Each user gets their own
-    Mem0 memory instance and supervisor agent that are cached for performance.
-    
+    separate Mem0 memory contexts for each user. Each user gets their own Mem0
+    memory instance and supervisor agent that are cached for performance.
+
     Features:
-        - Per-user memory isolation using Mem0 with Redis backend
-        - Semantic memory search and retrieval via Mem0
-        - Web search integration for current travel information
-        - Chat history management with configurable buffer sizes
-        - Automatic memory extraction and personalized recommendations
-    
+    - Per-user memory isolation using Mem0 with Redis backend
+    - Semantic memory search and retrieval via Mem0
+    - Web search integration for current travel information
+    - Chat history management with configurable buffer sizes
+    - Automatic memory extraction and personalized recommendations
+
     Attributes:
-        config: Application configuration containing API keys and model settings
-        tavily_client: Web search client for travel information
-        agent_model: OpenAI client for the main travel agent
+    - config: Application configuration containing API keys and model settings
+    - tavily_client: Web search client for travel information
+    - chat_client: OpenAI client that creates the chat agent
     """
 
     def __init__(self, config: Optional[AppConfig] = None):
@@ -171,7 +189,7 @@ class TravelAgent:
     # ------------------------------
     
     def _create_mem0_provider(self, user_id: str) -> Mem0Provider:
-        """Create Mem0 provider instance for a user."""
+        """Create a Mem0 provider instance bound to a specific user/thread."""
         print(f"🧠 Creating Mem0 provider for user: {user_id}")
         # Uses MEM0_API_KEY from env by default
         return Mem0Provider(
@@ -183,14 +201,14 @@ class TravelAgent:
         )
 
     def _get_or_create_user_ctx(self, user_id: str) -> UserCtx:
-        """Get or create user-specific context with Mem0 memory and agent components.
-        
+        """Return a cached or new `UserCtx` with memory, agent, and history store.
+
         Creates and caches a complete user context including Mem0 memory,
         chat history management, and supervisor agent.
-        
+
         Args:
             user_id: Unique identifier for the user
-            
+
         Returns:
             UserCtx: Complete user context with Mem0 memory initialized
         """
@@ -246,7 +264,7 @@ class TravelAgent:
         return self._user_ctx_cache[user_id]
 
     def _load_seed_data(self) -> Dict[str, Any]:
-        """Load seed data from JSON file."""
+        """Load seed data from `context/seed.json` adjacent to this module."""
         seed_file = Path(__file__).parent / "context" / "seed.json"
         with open(seed_file, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -256,7 +274,7 @@ class TravelAgent:
         return self._user_ctx_cache.keys()
 
     async def _init_seed_users(self) -> None:
-        """Initialize seed users with memories from seed.json."""
+        """Initialize seed users by inserting their memories into Mem0."""
         seed_data = self._load_seed_data()
         user_memories = seed_data.get("user_memories", {})
         
@@ -286,7 +304,7 @@ class TravelAgent:
         mem0_provider: Mem0Provider,
         chat_message_store_factory,
     ) -> Any:
-        """Create chat agent with Mem0 provider and Redis-backed history."""
+        """Create the chat agent with tools, Mem0 context, and Redis-backed history."""
         print("🤖 Creating ChatAgent with tools...", flush=True)
         try:
             agent = self.chat_client.create_agent(
@@ -304,7 +322,7 @@ class TravelAgent:
             raise
     
     def _get_tools(self) -> List[Any]:
-        """Get the list of tools for the travel agent."""
+        """Return the list of tool-callable functions exposed to the agent."""
         tools: List[Any] = []
         tools.append(
             ai_function(
@@ -352,11 +370,7 @@ class TravelAgent:
         return tools
     
     def _get_system_message(self) -> str:
-        """Get the system message for the travel agent supervisor.
-        
-        Returns:
-            str: Complete system message with role, responsibilities, and workflow
-        """
+        """Return the supervisor system message with roles, tool guidance, and style."""
         today = datetime.utcnow().strftime("%Y-%m-%d")
         return (
             f"You are an expert, time-aware, friendly Travel Concierge AI. Today is {today} (UTC). "

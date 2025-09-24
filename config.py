@@ -1,5 +1,7 @@
-"""
-Configuration management for the Travel Agent application.
+"""Configuration management for the Travel Agent application.
+
+Provides a typed `AppConfig` with environment-driven settings and basic
+dependency checks used by the UI entrypoint.
 """
 # import suppress_warnings  # Must be first to suppress warnings
 import warnings
