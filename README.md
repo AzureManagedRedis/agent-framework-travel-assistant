@@ -1,89 +1,149 @@
 
-# TO DO
+# 🌍 AI Travel Concierge (Agent Framework + Redis + Mem0)
 
-1. Redo this Readme
-2. Maybe better hotel/fligth search?
-3. Time and space aware planning? - Timestamps in memories?
-4. Better memory management?
+A travel planning assistant with dual-layer memory: Redis-backed chat history and Mem0-powered long‑term memory. It provides time‑aware research via Tavily, uses OpenAI models for planning, and can export finalized itineraries to an ICS calendar file, all wrapped in a polished Gradio UI with per‑user contexts.
 
+## 🧠 Key features
+- **Dual-layer memory**: Short‑term chat history in Redis; long‑term preferences via Mem0 (OpenAI LLM + embeddings)
+- **Per‑user isolation**: Separate memory contexts and chat history for each user
+- **Time‑aware search**: Tavily integration for logistics (flights/hotels/transport) and destination research
+- **Calendar export (ICS)**: Generate calendar files for itineraries and open the folder via UI
+- **Gradio UI**: Chat, user tabs, live agent event logs, clear‑chat control
+- **Configurable**: Pydantic settings via environment variables, `.env` support
 
+## 🧩 Architecture overview
+- `gradio_app.py`: Launches the Gradio app, builds UI, wires event streaming, calendar open, and user switching
+- `agent.py`: Implements `TravelAgent` using Agent Framework
+  - Tools: `search_logistics`, `search_general`, `generate_calendar_ics`
+  - Mem0 long‑term memory per user; Redis chat message store for short‑term context
+  - Tavily search/extract for fresh web info; ICS generation via `ics`
+- `config.py`: Pydantic settings and dependency checks
+- `context/seed.json`: Seeded users and initial long‑term memory entries
+- `assets/styles.css`: Custom theme and styling
 
+## ✅ Prerequisites
+- Python 3.11.x or 3.12.x (per `pyproject.toml` requires >=3.11,<3.13)
+- Redis instance (local Docker, Redis Cloud, or Azure Managed Redis)
+- API keys: OpenAI, Tavily, Mem0
 
-# 🌍 Autogen Travel Concierge 
+## 🔐 Required environment variables
+Provide via your environment or a `.env` file in the project root. Minimum required:
+- `OPENAI_API_KEY` (must start with `sk-`; validated)
+- `TAVILY_API_KEY`
+- `MEM0_API_KEY`
 
-A sophisticated AI travel planning assistant showcasing AutoGen's advanced memory capabilities with dual-layer memory architecture: Redis-backed chat history and Mem0 based long term memory that remembers user preferences.
+Recommended/optional overrides (defaults shown):
+- `TRAVEL_AGENT_MODEL` = `gpt-4.1`
+- `MEM0_MODEL` = `gpt-4.1-mini`
+- `MEM0_EMBEDDING_MODEL` = `text-embedding-3-small`
+- `MEM0_EMBDDING_MODEL_DIMS` = `1536`
+- `REDIS_URL` = `redis://localhost:6379`
+- `MAX_CHAT_HISTORY_SIZE` = `6`
+- `MAX_SEARCH_RESULTS` = `5`
+- `SERVER_NAME` = `0.0.0.0`
+- `SERVER_PORT` = `7860`
+- `SHARE` = `false`
 
-## 🧠 What's included?
+Example `.env` template:
+```env
+OPENAI_API_KEY=sk-...
+TAVILY_API_KEY=...
+MEM0_API_KEY=...
+REDIS_URL=redis://localhost:6379
+TRAVEL_AGENT_MODEL=gpt-4.1
+MEM0_MODEL=gpt-4.1-mini
+MEM0_EMBEDDING_MODEL=text-embedding-3-small
+MEM0_EMBDDING_MODEL_DIMS=1536
+MAX_CHAT_HISTORY_SIZE=6
+MAX_SEARCH_RESULTS=5
+SERVER_NAME=0.0.0.0
+SERVER_PORT=7860
+SHARE=false
+```
 
-- **🎯 Dual-Layer Memory**: Short-term chat history (Redis) + Long-term learning (Mem0+Redis)
-- **👥 User Isolation**: Pre-seeded users get completely separate memory contexts
-- **🔄 Session Persistence**: Your conversations and preferences survive app restarts
-- **📚 Intelligent Learning**: The agent learns your travel preferences automatically
-- **🌐 Real-time Search**: Live travel information via Tavily search API
-- **💬 Clean Chat UI**: Gradio interface with user management
- - **📅 Calendar Export (ICS)**: Generate a calendar file for your itinerary and open it directly in your default calendar app
-
-## 🚀 Quick Setup (<5 minutes)
-
-### Step 1: Get Your API Keys
-You'll need three API keys:
-- **OpenAI API Key**: Get from [platform.openai.com](https://platform.openai.com/api-keys)
-- **Tavily API Key**: Get from [tavily.com](https://tavily.com) (free tier available)  
-- **Redis URL**: See step two
-
-### Step 2: Set Up Redis
-You have 3 options for Redis:
-
-#### Option A: Local Redis with Docker**
+## 🗄️ Redis setup options
+- Local (Docker):
 ```bash
 docker run --name redis -p 6379:6379 -d redis:8.0.3
 ```
+- Redis Cloud: create a free database and set `REDIS_URL`
+- Azure Managed Redis: see Microsoft quickstart (entry tier works)
 
-#### Option B: Redis Cloud
-Get a free db [here](https://redis.io/cloud).
-
-#### Option C: Azure Managed Redis
-Here's a quickstart guide to create Azure Managed Redis for as low as $12 monthly: https://learn.microsoft.com/en-us/azure/redis/quickstart-create-managed-redis
-
-### Step 3: Setup the Project
+To clear all app data in Redis (chat history, summaries):
 ```bash
-# Install uv (Python package manager)
+make redis-clear
+```
+
+## ▶️ Install & run (uv)
+This project uses `uv` for environment and dependency management.
+```bash
+# Install uv (if not installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Clone and install
-git clone <repository-url>
-cd amr-autogen-travel-agent
-
-# Get uv env setup
+# From the project root
+echo "Creating and syncing environment..."
 uv sync
-```
 
-### Step 4: Configure Your Environment
-Create a `.env` file with your API keys:
-```bash
-cp env.example .env
-```
+# Create .env from example (then edit values)
+cp -n .env.example .env 2>/dev/null || true
 
-Edit the `.env` file as needed.
-
-### Step 5: Launch the Application
-```bash
+# Start the app (opens browser)
 uv run python gradio_app.py
+# or
+make start
+```
+The app launches at `http://localhost:7860`.
+
+## 👤 Seed users and memory
+- Users are defined in `context/seed.json` under `user_memories`
+- On first run, each user's long‑term memory is seeded via Mem0
+- The default selected user is the first key in `seed.json`
+- Switch users via the tabs at the top of the UI
+
+Example `context/seed.json`:
+```json
+{
+  "user_memories": {
+    "Alice": [ { "insight": "Prefers boutique hotels and walkable neighborhoods" } ],
+    "Bob": [ { "insight": "Loves food tours and early morning flights" } ]
+  }
+}
 ```
 
-🎉 **Open [http://localhost:7860](http://localhost:7860)** to start chatting!
+## 💬 Using the app
+- Ask for trip ideas, date‑bound logistics, or destination research
+- The agent will call tools as needed:
+  - `search_logistics(query, start_date?, end_date?)` for flights/hotels/transport
+  - `search_general(query)` for activities, neighborhoods, dining, events
+  - `generate_calendar_ics(...)` once your itinerary is finalized to produce an `.ics` file
+- The right panel shows live agent events and tool logs
+- Use “Clear Chat” to wipe the current user’s short‑term history from Redis
 
-The application will:
-- ✅ Validate your configuration and API connections
-- ✅ Initialize the dual-layer memory system
-- ✅ Load the user management interface
-- ✅ Enable calendar export/open from finalized itineraries
+## 📅 Calendar export
+- When an itinerary is finalized, the agent can export an `.ics` file
+- Click “Open Calendar” to open the per‑user calendars folder in your OS file explorer
+- Files are stored under `assets/calendars/<USER_ID>/`
 
-## 👤 User Profile Configuration
+## 🧰 Make targets
+```bash
+make start        # Run the app via uv
+make clean        # Remove __pycache__ and calendars
+make redis-clear  # FLUSHALL on $REDIS_URL (defaults to localhost)
+```
 
-The demo comes with pre-configured user profiles (Tyler, Purna, and Jan) that have distinct travel preferences. You can easily customize these or add new profiles by editing `context/seed.json`.
+## 🐛 Troubleshooting
+- Missing API keys: app exits with a configuration error and hints for `.env`
+- OpenAI key must start with `sk-` (validated in `config.py`)
+- Redis connection errors: verify `REDIS_URL` and that Redis is reachable
+- Mem0 errors when seeding: check `MEM0_API_KEY` and OpenAI settings
+- Browser doesn’t open: navigate to `http://localhost:7860` manually
+
+## 📦 Dependencies (selected)
+- `agent-framework-project` (local path dependency in `pyproject.toml`)
+- `redis`, `redisvl`, `pydantic`, `pydantic-settings`
+- `openai`, `tavily-python`, `httpx`, `ics`, `gradio`
 
 ---
 
-**🚀 Ready to see AI memory in action? Start chatting and watch your travel preferences get smarter!**
+Built with Redis, Agent Framework, OpenAI, and Tavily. Enjoy planning!
 

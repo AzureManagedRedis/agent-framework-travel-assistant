@@ -36,7 +36,6 @@ class AppConfig(BaseSettings):
     server_port: int = Field(default=7860, env="SERVER_PORT", description="Server port")
     share: bool = Field(default=False, env="SHARE", description="Enable public sharing")
 
-    OPENAI_CHAT_MODEL_ID: str = Field(..., env="OPENAI_CHAT_MODEL_ID", description="OpenAI chat model ID")
     MEM0_API_KEY: str = Field(..., env="MEM0_API_KEY", description="Mem0 API key")
     
     class Config:

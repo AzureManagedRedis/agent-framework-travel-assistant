@@ -1,12 +1,10 @@
 [project]
-name = "amr-autogen-travel-agent"
+name = "amr-af-travel-agent"
 version = "0.1.0"
-description = "Azure Managed Redis + AutoGen multi-agent demo with STM/LTM, Tavily search, ICS export, and Gradio UI."
+description = "Azure Managed Redis + Agent Framework demo with STM/LTM, Tavily search, ICS export, and Gradio UI."
 requires-python = ">=3.11,<3.13"
 
 dependencies = [
-  "autogen-agentchat",
-  "autogen-ext[azure,openai,redisvl,mem0]",
   "redis>=5.0.0",
   "pydantic>=2.7",
   "pydantic-settings>=2.0",
