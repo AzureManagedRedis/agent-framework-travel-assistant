@@ -41,6 +41,28 @@ from config import AppConfig
 
 
 
+class NonBlockingMem0Provider(Mem0Provider):
+    """Mem0 provider that does not block on messages_adding.
+
+    Schedules the underlying add operation as a background task so agent
+    streaming can complete without waiting for Mem0's LLM post-processing.
+    """
+
+    async def messages_adding(self, thread_id, new_messages) -> None:  # type: ignore[override]
+        try:
+            asyncio.create_task(self._messages_adding_bg(thread_id, new_messages))
+        except Exception:
+            # Best-effort: background scheduling failed, ignore to avoid blocking user flow
+            pass
+
+    async def _messages_adding_bg(self, thread_id, new_messages) -> None:
+        try:
+            await super().messages_adding(thread_id, new_messages)
+        except Exception as e:
+            # Log and swallow to prevent errors bubbling up from background task
+            print(f"⚠️ Mem0 background add failed: {e}")
+
+
 class _SanitizingChatMessageStore:
     """Wrapper for `RedisChatMessageStore` that enforces OpenAI tool-call ordering.
 
@@ -192,7 +214,7 @@ class TravelAgent:
         """Create a Mem0 provider instance bound to a specific user/thread."""
         print(f"🧠 Creating Mem0 provider for user: {user_id}")
         # Uses MEM0_API_KEY from env by default
-        return Mem0Provider(
+        return NonBlockingMem0Provider(
             user_id=user_id,
             thread_id=f"user:{user_id}",
             context_prompt=(
@@ -1110,25 +1132,24 @@ class TravelAgent:
     # -----------------
 
     async def store_memory(self, user_id: str, user_message: str) -> None:
-        """Store user message in memory asynchronously.
-        
-        This method is called after the response is complete to avoid blocking
-        the initial request processing.
-        
-        Args:
-            user_id: User identifier for context isolation
-            user_message: The user's input message
-        """
+        """Store user message in memory via background task (non-blocking)."""
+        async def _bg() -> None:
+            try:
+                ctx = self._get_or_create_user_ctx(user_id)
+                await ctx.mem0_provider.mem0_client.add(
+                    messages=[{"role": "user", "content": user_message}],
+                    user_id=user_id,
+                    run_id=ctx.mem0_provider.thread_id,
+                    metadata={"source": "chat"},
+                )
+            except Exception as e:
+                print(f"⚠️ Failed to store conversation memory for user {user_id}: {e}")
+
         try:
-            ctx = self._get_or_create_user_ctx(user_id)
-            await ctx.mem0_provider.mem0_client.add(
-                messages=[{"role": "user", "content": user_message}],
-                user_id=user_id,
-                run_id=ctx.mem0_provider.thread_id,
-                metadata={"source": "chat"},
-            )
-        except Exception as e:
-            print(f"⚠️ Failed to store conversation memory for user {user_id}: {e}")
+            asyncio.create_task(_bg())
+        except Exception:
+            # If task scheduling fails, ignore to keep UI responsive
+            pass
 
     async def get_chat_history(self, user_id: str, n: Optional[int] = None) -> List[Dict[str, str]]:
         """Retrieve chat history for a user from Redis storage.
