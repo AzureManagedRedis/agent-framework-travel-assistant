@@ -31,7 +31,7 @@ Try the following query flow to test the agent!
 - `assets/styles.css`: Custom theme and styling
 
 ## ✅ Prerequisites
-- Python 3.11.x or 3.12.x (per `pyproject.toml` requires >=3.11,<3.13)
+- Python >=3.11 
 - Redis instance (local Docker, Redis Cloud, or Azure Managed Redis)
 - API keys: OpenAI, Tavily, Mem0
 
@@ -89,17 +89,21 @@ This project uses `uv` for environment and dependency management.
 # Install uv (if not installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
+# Install brew
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install dotenv
+brew install dotenv
+
 # From the project root
 echo "Creating and syncing environment..."
 uv sync
 
-# Create .env from example (then edit values)
+# Create .env from example (then fill in values)
 cp -n .env.example .env 2>/dev/null || true
 
 # Start the app (opens browser)
-uv run python gradio_app.py
-# or
-make start
+dotenv run -- uv run gradio_app.py
 ```
 The app launches at `http://localhost:7860`.
 
@@ -133,13 +137,6 @@ Example `context/seed.json`:
 - Click “Open Calendar” to open the per‑user calendars folder in your OS file explorer
 - Files are stored under `assets/calendars/<USER_ID>/`
 
-## 🧰 Make targets
-```bash
-make start        # Run the app via uv
-make clean        # Remove __pycache__ and calendars
-make redis-clear  # FLUSHALL on $REDIS_URL (defaults to localhost)
-```
-
 ## 🐛 Troubleshooting
 - Missing API keys: app exits with a configuration error and hints for `.env`
 - OpenAI key must start with `sk-` (validated in `config.py`)
@@ -147,12 +144,7 @@ make redis-clear  # FLUSHALL on $REDIS_URL (defaults to localhost)
 - Mem0 errors when seeding: check `MEM0_API_KEY` and OpenAI settings
 - Browser doesn’t open: navigate to `http://localhost:7860` manually
 
-## 📦 Dependencies (selected)
-- `agent-framework-project` (local path dependency in `pyproject.toml`)
-- `redis`, `redisvl`, `pydantic`, `pydantic-settings`
-- `openai`, `tavily-python`, `httpx`, `ics`, `gradio`
-
 ---
 
-Built with Redis, Agent Framework, OpenAI, and Tavily. Enjoy planning!
+Built with Redis, Agent Framework, OpenAI, and Tavily. Enjoy!
 
