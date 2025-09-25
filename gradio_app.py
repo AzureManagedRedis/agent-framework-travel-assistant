@@ -113,6 +113,8 @@ class TravelAgentUI:
         self.config = config or get_config()
         self.agent = TravelAgent(config=self.config)
         self.current_user_id = self._get_default_user_id_from_seed()
+        # Number of past conversation steps (user+assistant pairs) to render
+        self.history_steps = 20
         self.initial_history = []  # Will be populated async
         self.user_ids = []  # Dynamic users loaded from seed
         self.latest_calendar_file = None  # Track latest generated calendar
@@ -145,8 +147,10 @@ class TravelAgentUI:
                 self.user_ids = [self.current_user_id] + sorted_users
             else:
                 self.user_ids = sorted_users
-            # Load chat history for the current user
-            self.initial_history = await self.agent.get_chat_history(self.current_user_id, n=-1)
+            # Load last N steps (approx 2 messages per step: user + assistant)
+            self.initial_history = await self.agent.get_chat_history(
+                self.current_user_id, n=self.history_steps * 2
+            )
             print(f"✅ Loaded {len(self.initial_history)} initial messages for user: {self.current_user_id}")
         except Exception as e:
             print(f"⚠️ Warning: Could not load initial chat history: {e}")
@@ -162,8 +166,8 @@ class TravelAgentUI:
             Chat history for the new user
         """
         if new_user_id == self.current_user_id:
-            # No change needed, return current history
-            return await self.agent.get_chat_history(self.current_user_id, n=-1)
+            # No change needed, return current history (last N steps)
+            return await self.agent.get_chat_history(self.current_user_id, n=self.history_steps * 2)
         
         # Switch to the new user
         self.current_user_id = new_user_id
@@ -171,8 +175,8 @@ class TravelAgentUI:
         # Initialize the new user context (this will preseed if needed)
         self.agent._get_or_create_user_ctx(new_user_id)
         
-        # Return the new user's chat history
-        return await self.agent.get_chat_history(new_user_id, n=-1)
+        # Return the new user's last N steps of chat history
+        return await self.agent.get_chat_history(new_user_id, n=self.history_steps * 2)
     
     async def clear_chat_history(self) -> List[dict]:
         """Clear chat history for the current user from Redis and UI."""

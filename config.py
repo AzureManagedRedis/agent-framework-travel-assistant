@@ -27,7 +27,8 @@ class AppConfig(BaseSettings):
 
     # Other config
     max_tool_iterations: int = Field(default=8, env="MAX_TOOL_ITERATIONS", description="Maximum tool iterations")
-    max_chat_history_size: int = Field(default=6, env="MAX_CHAT_HISTORY_SIZE", description="Maximum chat history size")
+    # Keep at least last 20 conversation steps (≈ 40 messages)
+    max_chat_history_size: int = Field(default=40, env="MAX_CHAT_HISTORY_SIZE", description="Maximum chat history size (messages)")
     max_search_results: int = Field(default=5, env="MAX_SEARCH_RESULTS", description="Maximum search results from Tavily client")
 
     # Redis Configuration
