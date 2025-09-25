@@ -39,6 +39,7 @@ from agent_framework_redis._chat_message_store import RedisChatMessageStore
 from agent_framework.exceptions import ServiceResponseException
 
 from config import AppConfig
+from utils.ui_events import emit_ui_event
 
 
 
@@ -389,6 +390,16 @@ class TravelAgent:
                 ),
             )
         )
+        tools.append(
+            ai_function(
+                self.testing_tool_call,
+                name="testing_tool_call",
+                description=(
+                    "Diagnostic tool to verify tool-calling and UI event rendering. "
+                    "Emits progress updates and a final result."
+                ),
+            )
+        )
         print(f"🏁 Tool creation complete. {len(tools)} tools ready.", flush=True)
         return tools
     
@@ -407,6 +418,7 @@ class TravelAgent:
             "- Use search_logistics ONLY for flights, hotels, or transport. Include start_date/end_date (YYYY-MM-DD) when known.\n"
             "- Use search_general for activities, attractions, neighborhoods, dining, events, or local tips. Include dates when relevant.\n"
             "- Use generate_calendar_ics when you have a finalized itinerary. Pass simple events array with title, date, optional times/location/notes.\n"
+            "- Use testing_tool_call when the user asks you to verify tool calling capability or to run a diagnostic test.\n"
             "- Prefer recent sources (past 12–24 months) and pass explicit dates to tools whenever the user provides a time window.\n"
             "DISCOVERY:\n"
             "- If missing details, ask targeted questions (exact dates or window, origin/destination, budget, party size, interests,\n"
@@ -421,6 +433,45 @@ class TravelAgent:
             "- Consider any appended important insights (long-term memory) from the user before answering and adapt to them.\n"
             "- Consider any relevant memories as helpful context but treat current session state as priority since it's current."
         )
+
+    async def testing_tool_call(
+        self,
+        message: Optional[str] = None,
+        steps: int = 5,
+        delay_ms: int = 250,
+    ) -> Dict[str, Any]:
+        """🧪 Emit a series of progress logs to validate tool-calling and UI event rendering.
+
+        Args:
+            message: Optional message to include in logs
+            steps: Number of progress steps to emit
+            delay_ms: Delay in milliseconds between steps
+
+        Returns:
+            Dict containing a simple success payload
+        """
+        txt = (message or "Running diagnostic").strip()
+        emit_ui_event("tool_log", "🧪", "testing_tool_call", f"start: {txt}")
+        print(f"🔧 TEST TOOL: start - {txt}", flush=True)
+
+        steps = max(1, min(steps, 50))
+        delay = max(0, delay_ms) / 1000.0
+
+        for i in range(1, steps + 1):
+            pct = int(i * 100 / steps)
+            msg = f"step {i}/{steps} ({pct}%)"
+            # Structured UI event for reliable rendering
+            emit_ui_event("tool_log", "🧪", "testing_tool_call", msg, progress=pct)
+            # Plain log line fallback
+            print(f"🧪 TEST TOOL: {msg}", flush=True)
+            try:
+                await asyncio.sleep(delay)
+            except Exception:
+                pass
+
+        emit_ui_event("tool_result", "🧪", "testing_tool_call finished", "success")
+        print("✅ TEST TOOL: complete", flush=True)
+        return {"status": "ok", "steps": steps, "message": txt}
 
     # -----------------
     # Tools
@@ -446,7 +497,12 @@ class TravelAgent:
         Returns:
             Dictionary with results and extractions
         """
-        print(f"🔧 {search_type.upper()} SEARCH: {query}", flush=True)
+        title = f"{search_type.upper()} SEARCH"
+        # print(f"🔧 {title}: {query}", flush=True)
+        try:
+            emit_ui_event("tool_log", "🔧", title, query)
+        except Exception:
+            pass
         
         try:
             # Augment query with dates if provided
@@ -476,7 +532,12 @@ class TravelAgent:
             # Filter results by score
             all_results = results.get("results", [])
             filtered_results = [r for r in all_results if r.get("score", 0) > 0.2]
-            print(f"📊 Found {len(filtered_results)}/{len(all_results)} quality results", flush=True)
+            found_msg = f"Found {len(filtered_results)}/{len(all_results)} quality results"
+            # print(f"📊 {found_msg}", flush=True)
+            try:
+                emit_ui_event("tool_log", "📊", title, found_msg, results=len(filtered_results), total=len(all_results))
+            except Exception:
+                pass
             
             results["results"] = filtered_results
 
@@ -491,17 +552,31 @@ class TravelAgent:
                         extractions = extracted.get("results", [])
                     elif isinstance(extracted, list):
                         extractions = extracted
-                    print(f"📄 Extracted {len(extractions)} content blocks", flush=True)
+                    extract_msg = f"Extracted {len(extractions)} content blocks"
+                    # print(f"📄 {extract_msg}", flush=True)
+                    try:
+                        emit_ui_event("tool_log", "📄", title, extract_msg, extractions=len(extractions))
+                    except Exception:
+                        pass
                 except Exception as extract_e:
                     print(f"⚠️ URL extraction failed: {extract_e}", flush=True)
 
             results["extractions"] = extractions
-            print(f"✅ {search_type.upper()} COMPLETE: {len(filtered_results)} results + {len(extractions)} extractions", flush=True)
+            complete_msg = f"{len(filtered_results)} results + {len(extractions)} extractions"
+            # print(f"✅ {title} COMPLETE: {complete_msg}", flush=True)
+            try:
+                emit_ui_event("tool_result", "✅", f"{title} finished", complete_msg, results=len(filtered_results), extractions=len(extractions))
+            except Exception:
+                pass
             return results
             
         except Exception as e:
             error_msg = f"❌ {search_type.upper()} ERROR: {str(e)}"
             print(error_msg, flush=True)
+            try:
+                emit_ui_event("tool_log", "❌", f"{title} error", str(e))
+            except Exception:
+                pass
             return {"error": error_msg, "results": [], "extractions": []}
 
     async def search_logistics(
@@ -582,6 +657,10 @@ class TravelAgent:
         def _generate_calendar_ics_sync() -> Dict[str, Any]:
             print(f"🔧 CALENDAR GENERATION: Creating simple .ics file", flush=True)
             try:
+                emit_ui_event("tool_log", "🔧", "generate_calendar_ics", "Creating .ics file")
+            except Exception:
+                pass
+            try:
                 _events = events
                 if not _events:
                     if title and date:
@@ -623,6 +702,18 @@ class TravelAgent:
                     f.write(str(calendar))
 
                 print(f"✅ CALENDAR COMPLETE: {len(_events)} events in {filename}", flush=True)
+                try:
+                    emit_ui_event(
+                        "tool_result",
+                        "✅",
+                        "generate_calendar_ics finished",
+                        f"{len(_events)} events in {filename}",
+                        file_path=str(file_path.absolute()),
+                        filename=filename,
+                        events_count=len(_events),
+                    )
+                except Exception:
+                    pass
 
                 return {
                     "file_path": str(file_path.absolute()),
@@ -632,6 +723,10 @@ class TravelAgent:
             except Exception as e:
                 error_msg = f"❌ CALENDAR ERROR: {str(e)}"
                 print(error_msg, flush=True)
+                try:
+                    emit_ui_event("tool_log", "❌", "generate_calendar_ics error", str(e))
+                except Exception:
+                    pass
                 return {"error": error_msg, "file_path": None, "events_count": 0}
 
         return await asyncio.to_thread(_generate_calendar_ics_sync)
@@ -954,11 +1049,29 @@ class TravelAgent:
                             display_line = str(line)
                         except Exception:
                             display_line = ""
-                        if display_line:
-                            await event_queue.put({
-                                "type": "tool_log",
-                                "html": _html("", "", display_line),
-                            })
+                        if not display_line:
+                            continue
+                        # Parse structured UI events if present
+                        if display_line.startswith("UI_EVENT "):
+                            try:
+                                payload = json.loads(display_line[len("UI_EVENT "):])
+                                await event_queue.put({
+                                    "type": payload.get("type") or "tool_log",
+                                    "html": _html(
+                                        payload.get("icon") or "",
+                                        payload.get("title") or "",
+                                        payload.get("message") or "",
+                                    ),
+                                    **{k: v for k, v in payload.items() if k not in {"type", "icon", "title", "message"}},
+                                })
+                                continue
+                            except Exception:
+                                pass
+                        # Fallback plain log line
+                        await event_queue.put({
+                            "type": "tool_log",
+                            "html": _html("", "", display_line),
+                        })
                 finally:
                     await event_queue.put(None)
 
