@@ -272,7 +272,7 @@ class TravelAgentUI:
                         Your intelligent travel planning assistant powered by AI & Long Term Memory
                     </p>
                     <p style="color: #8A99A0; font-size: 14px;">
-                        Built on Redis, Autogen, Tavily, and OpenAI
+                        Built on Redis, Mem0, Microsoft Agent Framework, Tavily, and OpenAI
                     </p>
                 </div>
             """)

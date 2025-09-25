@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, AsyncGenerator
 import re
 import hashlib
+from queue import Queue
 
 from tavily import TavilyClient
 from ics import Calendar, Event, DisplayAlarm
@@ -503,7 +504,7 @@ class TravelAgent:
             print(error_msg, flush=True)
             return {"error": error_msg, "results": [], "extractions": []}
 
-    def search_logistics(
+    async def search_logistics(
         self,
         query: str,
         start_date: Optional[str] = None,
@@ -530,15 +531,16 @@ class TravelAgent:
             "booking.com", "hotels.com",
         ]
         
-        return self._perform_search(
-            query=query,
-            search_type="logistics",
-            include_domains=include_domains,
-            start_date=start_date,
-            end_date=end_date
+        return await asyncio.to_thread(
+            self._perform_search,
+            query,
+            "logistics",
+            include_domains,
+            start_date,
+            end_date,
         )
 
-    def search_general(
+    async def search_general(
         self,
         query: str,
     ) -> Dict[str, Any]:
@@ -554,12 +556,17 @@ class TravelAgent:
         Behavior
         - Runs an open web search (no logistics domains restriction) with raw content for context.
         """
-        return self._perform_search(
-            query=query,
-            search_type="general"
+        # print(f"🔧 {general} SEARCH: {query}", flush=True)
+        return await asyncio.to_thread(
+            self._perform_search,
+            query,
+            "general",
+            None,
+            None,
+            None,
         )
 
-    def generate_calendar_ics(
+    async def generate_calendar_ics(
         self,
         events: Optional[List[Dict[str, Any]]] = None,
         trip_name: Optional[str] = None,
@@ -570,80 +577,64 @@ class TravelAgent:
         location: Optional[str] = None,
         notes: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """📅 Generate a simple .ics calendar file from travel events.
+        """📅 Generate a simple .ics calendar file from travel events (non-blocking)."""
 
-        Args:
-            events: Optional list of event dicts with keys:
-                - title (required)
-                - date (required, 'YYYY-MM-DD')
-                - start_time (optional, 'HH:MM')
-                - end_time (optional, 'HH:MM')
-                - location (optional)
-                - notes (optional)
-            trip_name: Optional calendar name.
-            title/date/start_time/end_time/location/notes: Optional single-event fields used if 'events' is not provided.
+        def _generate_calendar_ics_sync() -> Dict[str, Any]:
+            print(f"🔧 CALENDAR GENERATION: Creating simple .ics file", flush=True)
+            try:
+                _events = events
+                if not _events:
+                    if title and date:
+                        single_event: Dict[str, Any] = {
+                            "title": title,
+                            "date": date,
+                        }
+                        if start_time:
+                            single_event["start_time"] = start_time
+                        if end_time:
+                            single_event["end_time"] = end_time
+                        if location:
+                            single_event["location"] = location
+                        if notes:
+                            single_event["notes"] = notes
+                        _events = [single_event]
+                    else:
+                        return {"error": "No events provided", "file_path": None, "events_count": 0}
 
-        Returns:
-            Dictionary with file_path and events_count
-        """
-        print(f"🔧 CALENDAR GENERATION: Creating simple .ics file", flush=True)
-        
-        try:
-            if not events:
-                # Fallback: build a single event from provided fields
-                if title and date:
-                    single_event: Dict[str, Any] = {
-                        "title": title,
-                        "date": date,
-                    }
-                    if start_time:
-                        single_event["start_time"] = start_time
-                    if end_time:
-                        single_event["end_time"] = end_time
-                    if location:
-                        single_event["location"] = location
-                    if notes:
-                        single_event["notes"] = notes
-                    events = [single_event]
-                else:
-                    return {"error": "No events provided", "file_path": None, "events_count": 0}
+                calendar = Calendar()
+                calendar.extra.append(ContentLine("X-WR-CALNAME", value=trip_name or "Travel Itinerary"))
 
-            # Create calendar
-            calendar = Calendar()
-            calendar.extra.append(ContentLine("X-WR-CALNAME", value=trip_name or "Travel Itinerary"))
-            
-            user_id = getattr(self, '_current_user_id', 'default')
-            
-            for event_data in events:
-                event = self._create_simple_event(event_data, user_id)
-                if event:
-                    calendar.events.add(event)
-            
-            # Generate filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_name = re.sub(r'[^\w\-_]', '_', (trip_name or 'itinerary'))[:30]
-            filename = f"{timestamp}_{safe_name}.ics"
-            
-            # Save file
-            calendar_dir = Path(__file__).parent / "assets" / "calendars" / user_id
-            calendar_dir.mkdir(parents=True, exist_ok=True)
-            file_path = calendar_dir / filename
-            
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(str(calendar))
-            
-            print(f"✅ CALENDAR COMPLETE: {len(events)} events in {filename}", flush=True)
-            
-            return {
-                "file_path": str(file_path.absolute()),
-                "filename": filename,
-                "events_count": len(events)
-            }
-            
-        except Exception as e:
-            error_msg = f"❌ CALENDAR ERROR: {str(e)}"
-            print(error_msg, flush=True)
-            return {"error": error_msg, "file_path": None, "events_count": 0}
+                user_id = getattr(self, '_current_user_id', 'default')
+
+                for event_data in _events:
+                    event = self._create_simple_event(event_data, user_id)
+                    if event:
+                        calendar.events.add(event)
+
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                safe_name = re.sub(r'[^\w\-_]', '_', (trip_name or 'itinerary'))[:30]
+                filename = f"{timestamp}_{safe_name}.ics"
+
+                calendar_dir = Path(__file__).parent / "assets" / "calendars" / user_id
+                calendar_dir.mkdir(parents=True, exist_ok=True)
+                file_path = calendar_dir / filename
+
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(str(calendar))
+
+                print(f"✅ CALENDAR COMPLETE: {len(_events)} events in {filename}", flush=True)
+
+                return {
+                    "file_path": str(file_path.absolute()),
+                    "filename": filename,
+                    "events_count": len(_events)
+                }
+            except Exception as e:
+                error_msg = f"❌ CALENDAR ERROR: {str(e)}"
+                print(error_msg, flush=True)
+                return {"error": error_msg, "file_path": None, "events_count": 0}
+
+        return await asyncio.to_thread(_generate_calendar_ics_sync)
 
     def _create_simple_event(self, event_data: Dict[str, Any], user_id: str) -> Optional[Event]:
         """Create a simple ICS event from basic event data.
@@ -726,21 +717,18 @@ class TravelAgent:
         """
         # ------------------------------
         # Capture stdout/stderr prints as live UI events (start early)
+        # Use a thread-safe Queue because tools may run in worker threads
         # ------------------------------
-        log_queue: asyncio.Queue[str | None] = asyncio.Queue()
+        log_queue: Queue[str | None] = Queue()
 
         class _StreamTee:
-            def __init__(self, original_stream, queue: asyncio.Queue[str | None]):
+            def __init__(self, original_stream, queue: Queue[str | None]):
                 self._original = original_stream
                 self._queue = queue
                 self._buffer = ""
 
             def write(self, data: str) -> int:
-                written = self._original.write(data)
-                try:
-                    self._original.flush()
-                except Exception:
-                    pass
+                # First, capture lines to the async UI queue so UI isn't blocked by original sink buffering
                 self._buffer += data
                 while "\n" in self._buffer:
                     line, self._buffer = self._buffer.split("\n", 1)
@@ -750,6 +738,15 @@ class TravelAgent:
                             self._queue.put_nowait(line)
                         except Exception:
                             pass
+                # Then, mirror to the original stream best-effort
+                try:
+                    written = self._original.write(data)
+                    try:
+                        self._original.flush()
+                    except Exception:
+                        pass
+                except Exception:
+                    written = len(data)
                 return written
 
             def flush(self) -> None:
@@ -950,7 +947,7 @@ class TravelAgent:
             async def _consume_logs() -> None:
                 try:
                     while True:
-                        line = await log_queue.get()
+                        line = await asyncio.to_thread(log_queue.get)
                         if line is None:
                             break
                         try:
@@ -1006,7 +1003,7 @@ class TravelAgent:
                             except Exception:
                                 pass
                             try:
-                                await log_queue.put(None)
+                                log_queue.put(None)
                             except Exception:
                                 pass
                             logs_shutdown_sent = True
@@ -1123,6 +1120,13 @@ class TravelAgent:
 
         # Final yield to ensure thinking animation is removed
         if buffer:
+            # Schedule background memory add and emit UI event
+            try:
+                asyncio.create_task(self.store_memory(user_id, user_message))
+                yield buffer, _event("memory_add", "🧠", "Adding interaction to memory", "Queued for background storage")
+            except Exception:
+                pass
+
             yield buffer, _event("llm_response_end", "✅", f"LLM finished streaming", "")
             yield buffer, None
 
