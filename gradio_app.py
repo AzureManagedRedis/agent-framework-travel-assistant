@@ -410,16 +410,7 @@ class TravelAgentUI:
                         # Update calendar download visibility
                         yield history, events, events_html, latest_calendar_file, gr.update(visible=True), gr.update(value="", visible=False)
                     
-                    # After streaming completes, store conversation memory asynchronously
-                    if final_response and not final_response.endswith('●●●</span>'):
-                        # Create a background task to store memory without blocking
-                        import asyncio
-                        asyncio.create_task(
-                            self.agent.store_memory(
-                                self.current_user_id, 
-                                message, 
-                            )
-                        )
+                    # Memory storage is handled by Mem0Provider.invoked; no manual write needed
                     
                     # Final yield with calendar file info
                     yield history, events, events_html, latest_calendar_file, gr.update(visible=True), gr.update(value="", visible=False)

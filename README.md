@@ -14,11 +14,17 @@ A travel planning assistant with dual-layer memory: Redis-backed chat history an
 ## Recommended Demo Flow
 
 Try the following query flow to test the agent!
-1. Can you recommend things to do in Lisbon based on online opinion?
-2. Can you find a flight leaving on the 14th of January 2026 and returning on the 16th?
-3. How about a hotel for the stay? 
-4. Okay, put together an itinerary and give me a calendar.
-5. Click the Open Calendar button to add the routine to your schedule!
+
+### Blank User (Mark) - No Seed Preferences 
+1. I like bears and the places where bears can be found. 
+2. I think Christmas is quite a magical time of year and I enjoy visiting winter wonderland villages
+3. What's a place to visit that I might like?
+4. Can you give me a solid 3 day itinerary based on online recommendations? For what to do in (Pick one of the locations it mentions) 
+5. Okay, can you recommend a flight and hotel? I live in (Pick a location) and I'm going to leave on 22nd December and will return 26th December. 
+6. Give me the calendar. 
+
+### Pre-filled User (Shreya) 
+1. I'm planning to hit up Redis Released in London this year. Can you find more info about it?
 
 ## 🧩 Architecture overview
 - `gradio_app.py`: Launches the Gradio app, builds UI, wires event streaming, calendar open, and user switching
