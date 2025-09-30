@@ -446,7 +446,7 @@ class TravelAgent:
         """Return the supervisor system message with roles, tool guidance, and style."""
         today = datetime.utcnow().strftime("%Y-%m-%d")
         return (
-            f"You are an expert, time-aware, friendly Travel Concierge AI. Today is {today} (UTC). "
+            f"You are an expert, time-aware, friendly Travel Concierge AI. Today is {today} (UTC). Always be aware that this is the current date and time."
             "Assume your built in knowledge may be outdated; for anything time-sensitive, verify with tools.\n\n"
             "ROLE:\n"
             "- Discover destinations, plan itineraries, recommend accommodations, and organize logistics on behalf of the user.\n"
