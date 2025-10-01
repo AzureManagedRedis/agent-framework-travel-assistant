@@ -15,11 +15,51 @@ import os
 import subprocess
 import platform
 import json
+import traceback
+import sys
 from typing import List, Dict
 from pathlib import Path
 
 from agent import TravelAgent
 from config import get_config, validate_dependencies
+
+# ------------------------------
+# Global debugging helpers: always print full tracebacks
+# ------------------------------
+
+def _global_excepthook(exc_type, exc_value, exc_traceback):
+    try:
+        if issubclass(exc_type, KeyboardInterrupt):
+            return sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        print("\ud83d\udea9 Unhandled exception in gradio_app.py", flush=True)
+        traceback.print_exception(exc_type, exc_value, exc_traceback)
+    except Exception:
+        pass
+
+
+def _asyncio_exception_handler(loop, context):
+    try:
+        msg = context.get("message")
+        exc = context.get("exception")
+        if msg:
+            print(f"\ud83d\udea9 Unhandled asyncio exception: {msg}", flush=True)
+        else:
+            print("\ud83d\udea9 Unhandled asyncio exception", flush=True)
+        if exc:
+            traceback.print_exception(type(exc), exc, getattr(exc, "__traceback__", None))
+    except Exception:
+        pass
+
+
+try:
+    sys.excepthook = _global_excepthook  # type: ignore[assignment]
+    try:
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(_asyncio_exception_handler)
+    except Exception:
+        pass
+except Exception:
+    pass
 
 
 def load_css() -> str:
@@ -68,6 +108,10 @@ def open_calendar_file(file_path: str) -> tuple[str, bool]:
         else:
             return "❌ System command not found", False
     except Exception as e:
+        try:
+            traceback.print_exc()
+        except Exception:
+            pass
         return f"❌ Error opening calendar: {e}", False
 
 
@@ -100,6 +144,10 @@ def open_calendar_folder(folder_path: str) -> tuple[str, bool]:
     except FileNotFoundError:
         return "❌ System command not found", False
     except Exception as e:
+        try:
+            traceback.print_exc()
+        except Exception:
+            pass
         return f"❌ Error opening folder: {e}", False
 
 
@@ -132,7 +180,11 @@ class TravelAgentUI:
                 return next(iter(user_memories.keys()))
         except Exception as e:
             print(f"⚠️ Warning: Could not determine default user from seed: {e}")
-        return "Tyler"
+            try:
+                traceback.print_exc()
+            except Exception:
+                pass
+            return "Tyler"
     
     async def initialize_chat_history(self):
         """Initialize seed data and load initial chat history for the default user."""
@@ -154,6 +206,10 @@ class TravelAgentUI:
             print(f"✅ Loaded {len(self.initial_history)} initial messages for user: {self.current_user_id}")
         except Exception as e:
             print(f"⚠️ Warning: Could not load initial chat history: {e}")
+            try:
+                traceback.print_exc()
+            except Exception:
+                pass
             self.initial_history = []
 
     async def switch_user(self, new_user_id: str) -> List[dict]:
@@ -190,6 +246,10 @@ class TravelAgentUI:
             return []
         except Exception as e:
             print(f"❌ Error clearing chat history for user {self.current_user_id}: {e}")
+            try:
+                traceback.print_exc()
+            except Exception:
+                pass
             return []
     
     def create_interface(self) -> gr.Interface:
@@ -420,6 +480,10 @@ class TravelAgentUI:
                     # Replace thinking indicator with error message
                     history[-1] = {"role": "assistant", "content": error_msg}
                     print(f"❌ Error during streaming chat: {e}", flush=True)
+                    try:
+                        traceback.print_exc()
+                    except Exception:
+                        pass
                     events_html = "".join([e.get("html", "") for e in events[-200:]])
                     yield history, events, events_html, latest_calendar_file, gr.update(visible=True), gr.update(value="", visible=False)
             
@@ -460,6 +524,10 @@ class TravelAgentUI:
                         return history, [], initial_events_html, "", None, gr.update(visible=True), gr.update(value="", visible=False)
                     except Exception as e:
                         print(f"Error switching to user {user_id}: {e}")
+                        try:
+                            traceback.print_exc()
+                        except Exception:
+                            pass
                         return [], [], "", "", None, gr.update(visible=True), gr.update(value="", visible=False)
                 return _handler
 
@@ -552,6 +620,10 @@ def main():
 
     except Exception as e:
         print(f"❌ Failed to launch application: {e}")
+        try:
+            traceback.print_exc()
+        except Exception:
+            pass
         raise
 
 

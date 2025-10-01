@@ -24,6 +24,41 @@ import re
 import hashlib
 from queue import Queue
 
+# ------------------------------
+# Global debugging helpers: always print full tracebacks
+# ------------------------------
+def _global_excepthook(exc_type, exc_value, exc_traceback):
+    try:
+        if issubclass(exc_type, KeyboardInterrupt):
+            return sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        print("\ud83d\udea9 Unhandled exception in agent.py", flush=True)
+        traceback.print_exception(exc_type, exc_value, exc_traceback)
+    except Exception:
+        pass
+
+def _asyncio_exception_handler(loop, context):
+    try:
+        msg = context.get("message")
+        exc = context.get("exception")
+        if msg:
+            print(f"\ud83d\udea9 Unhandled asyncio exception: {msg}", flush=True)
+        else:
+            print("\ud83d\udea9 Unhandled asyncio exception", flush=True)
+        if exc:
+            traceback.print_exception(type(exc), exc, getattr(exc, "__traceback__", None))
+    except Exception:
+        pass
+
+try:
+    sys.excepthook = _global_excepthook  # type: ignore[assignment]
+    try:
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(_asyncio_exception_handler)
+    except Exception:
+        pass
+except Exception:
+    pass
+
 from tavily import TavilyClient
 from ics import Calendar, Event, DisplayAlarm
 from ics.grammar.parse import ContentLine
@@ -234,7 +269,7 @@ class TravelAgent:
         # Initialize shared clients
         self.tavily_client = TavilyClient(api_key=config.tavily_api_key)
         self.chat_client = OpenAIResponsesClient(
-            ai_model_id=config.travel_agent_model,
+            model_id=config.travel_agent_model,
             api_key=config.openai_api_key,
         )
 
@@ -358,6 +393,10 @@ class TravelAgent:
                 print(f"✅ Seeded {len(memories)} memories via Mem0 for user: {user_id}")
             except Exception as e:
                 print(f"❌ Failed to seed memory for user {user_id}: {e}")
+                try:
+                    traceback.print_exc()
+                except Exception:
+                    pass
                 continue
 
     def _create_agent(
@@ -615,6 +654,10 @@ class TravelAgent:
             error_msg = f"❌ {search_type.upper()} ERROR: {str(e)}"
             print(error_msg, flush=True)
             try:
+                traceback.print_exc()
+            except Exception:
+                pass
+            try:
                 emit_ui_event("tool_log", "❌", f"{title} error", str(e))
             except Exception:
                 pass
@@ -765,6 +808,10 @@ class TravelAgent:
                 error_msg = f"❌ CALENDAR ERROR: {str(e)}"
                 print(error_msg, flush=True)
                 try:
+                    traceback.print_exc()
+                except Exception:
+                    pass
+                try:
                     emit_ui_event("tool_log", "❌", "generate_calendar_ics error", str(e))
                 except Exception:
                     pass
@@ -839,6 +886,10 @@ class TravelAgent:
             
         except Exception as e:
             print(f"   ⚠️ Event creation failed: {e}", flush=True)
+            try:
+                traceback.print_exc()
+            except Exception:
+                pass
             return None
 
     # -----------------
@@ -1086,6 +1137,10 @@ class TravelAgent:
         except Exception as e:
             try:
                 yield buffer, _event("tool_log", "❌", "Mem0 retrieval error", str(e))
+            except Exception:
+                pass
+            try:
+                traceback.print_exc()
             except Exception:
                 pass
 
@@ -1393,6 +1448,10 @@ class TravelAgent:
             return gradio_messages
         except Exception as e:
             print(f"Error retrieving chat history for user {user_id}: {e}")
+            try:
+                traceback.print_exc()
+            except Exception:
+                pass
             return []
 
     def user_exists(self, user_id: str) -> bool:

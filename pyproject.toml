@@ -16,6 +16,6 @@ dependencies = [
   "gradio>=4.44.0",
   "typing-extensions>=4.0.0",
   "redisvl==0.8.2",
-  "agent-framework-project",
+  "agent-framework",
   "ics>=0.7.2",
 ]
