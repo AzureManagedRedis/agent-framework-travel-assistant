@@ -11,21 +11,6 @@ A travel planning assistant with dual-layer memory: Redis-backed chat history an
 - **Gradio UI**: Chat, user tabs, live agent event logs, clear‑chat control
 - **Configurable**: Pydantic settings via environment variables, `.env` support
 
-## Recommended Demo Flow
-
-Try the following query flow to test the agent!
-
-### Blank User (Mark) - No Seed Preferences 
-1. I like bears and the places where bears can be found. 
-2. I think Christmas is quite a magical time of year and I enjoy visiting winter wonderland villages
-3. What's a place to visit that I might like?
-4. Can you give me a solid 3 day itinerary based on online recommendations? For what to do in (Pick one of the locations it mentions) 
-5. Okay, can you recommend a flight and hotel? I live in (Pick a location) and I'm going to leave on 22nd December and will return 26th December. 
-6. Give me the calendar. 
-
-### Pre-filled User (Shreya) 
-1. I'm planning to hit up Redis Released in London this year. Can you find more info about it?
-
 ## 🧩 Architecture overview
 - `gradio_app.py`: Launches the Gradio app, builds UI, wires event streaming, calendar open, and user switching
 - `agent.py`: Implements `TravelAgent` using Agent Framework
@@ -35,6 +20,10 @@ Try the following query flow to test the agent!
 - `config.py`: Pydantic settings and dependency checks
 - `context/seed.json`: Seeded users and initial long‑term memory entries
 - `assets/styles.css`: Custom theme and styling
+
+A diagram of a software company:
+
+
 
 ## ✅ Prerequisites
 - Python >=3.11 
@@ -77,12 +66,15 @@ SHARE=false
 ```
 
 ## 🗄️ Redis setup options
+- Azure Managed Redis: This is an easy way to get a fully managed service that runs natively on Azure. You will require an Azure subscription to get started. Achieve unmatched performance with costs as low as USD 12 per month. Alternative methods for deploying Redis are outlined below. See quickstart guide through Azure portal: https://learn.microsoft.com/en-us/azure/redis/quickstart-create-managed-redis
+
+  Note: Enable access key-based authentication on your cache if you want to run the agent locally. Note the endpoint URL and the password; this will be used later.
+  
 - Local (Docker):
 ```bash
 docker run --name redis -p 6379:6379 -d redis:8.0.3
 ```
 - Redis Cloud: create a free database and set `REDIS_URL`
-- Azure Managed Redis: see Microsoft quickstart (entry tier works)
 
 To clear all app data in Redis (chat history, summaries):
 ```bash
@@ -142,6 +134,21 @@ Example `context/seed.json`:
 - When an itinerary is finalized, the agent can export an `.ics` file
 - Click “Open Calendar” to open the per‑user calendars folder in your OS file explorer
 - Files are stored under `assets/calendars/<USER_ID>/`
+
+## Recommended user flow
+
+Try the following query flow to see the agent in action:
+
+### Blank User (Mark) - No preferences (cold start case)
+1. I like bears and the places where bears can be found. 
+2. I think Christmas is quite a magical time of year and I enjoy visiting winter wonderland villages
+3. What's a place to visit that I might like?
+4. Can you give me a solid 3 day itinerary based on online recommendations? For what to do in (Pick one of the locations it mentions) 
+5. Okay, can you recommend a flight and hotel? I live in (Pick a location) and I'm going to leave on 22nd December and will return 26th December. 
+6. Give me the calendar. 
+
+### Pre-filled User (Shreya) - User preferences known at startup
+1. I'm planning to hit up Redis Released in London this year. Can you find more info about it?
 
 ## 🐛 Troubleshooting
 - Missing API keys: app exits with a configuration error and hints for `.env`
