@@ -38,7 +38,7 @@ Provide via your environment or a `.env` file in the project root. Minimum requi
 
 Recommended/optional overrides (defaults shown):
 - `TRAVEL_AGENT_MODEL` = `gpt-4o-mini`
-- `MEM0_MODEL` = `gpt-5-nano`
+- `MEM0_MODEL` = `gpt-4o-mini`
 - `MEM0_EMBEDDING_MODEL` = `text-embedding-3-small`
 - `MEM0_EMBDDING_MODEL_DIMS` = `1536`
 - `REDIS_URL` = `redis://localhost:6379`
