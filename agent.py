@@ -191,14 +191,17 @@ class TravelAgent:
         self.config = config
 
         # Set environment variables for SDK clients
-        os.environ["OPENAI_API_KEY"] = config.openai_api_key
+        os.environ["OPENAI_API_KEY"] = config.azure_openai_api_key
         os.environ["TAVILY_API_KEY"] = config.tavily_api_key
+        # Azure OpenAI specific
+        os.environ["AZURE_OPENAI_ENDPOINT"] = config.azure_openai_endpoint
+        os.environ["AZURE_OPENAI_API_VERSION"] = config.azure_openai_api_version
 
         # Initialize shared clients
         self.tavily_client = TavilyClient(api_key=config.tavily_api_key)
         self.chat_client = OpenAIResponsesClient(
             ai_model_id=config.travel_agent_model,
-            api_key=config.openai_api_key,
+            api_key=config.azure_openai_api_key,
         )
 
         # Initialize user context cache
@@ -1345,4 +1348,3 @@ class TravelAgent:
         if user_id in self._user_ctx_cache:
             print(f"🗑️  Resetting Mem0 memory for user: {user_id}")
             self._user_ctx_cache.pop(user_id, None)
-    

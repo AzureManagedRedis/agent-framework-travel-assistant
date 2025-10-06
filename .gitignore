@@ -6,3 +6,4 @@ context/logs/*
 context/users/*
 memory_bank/*
 assets/calendars/*
+.azure
