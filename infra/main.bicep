@@ -20,6 +20,9 @@ param tavilyApiKey string
 @description('Mem0 API Key')
 param mem0ApiKey string
 
+@description('Azure OpenAI data-plane API version (e.g., 2024-10-21 or a preview)')
+param azureOpenAIApiVersion string = '2024-10-21'
+
 // this tag tells azd which environment to use. The 'expirationfunction' name refers to the app in the azure.yaml file
 var tags = {
   'azd-env-name': environmentName
@@ -41,6 +44,7 @@ module resources './resources.bicep' = {
     serviceName: serviceName
     tavilyApiKey: tavilyApiKey
     mem0ApiKey: mem0ApiKey
+    azureOpenAIApiVersion: azureOpenAIApiVersion
   }
   scope : resourceGroup
 }

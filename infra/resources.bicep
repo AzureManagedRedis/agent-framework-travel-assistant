@@ -30,7 +30,9 @@ param serverName string = '0.0.0.0'
 
 param serverPort string = '7860'
 
-param azureOpenAIApiVersion string = '2024-02-15-preview'
+param azureOpenAIApiVersion string = '2024-10-21'
+
+param azureOpenAIModelVersion string = '2024-08-06'
 
 var resourceToken = uniqueString(resourceGroup().id)
 
@@ -118,6 +120,15 @@ resource redisUrlSecret 'Microsoft.KeyVault/vaults/secrets@2019-09-01' = {
   }
 }
 
+// Store Azure OpenAI API key in Key Vault as 'azure-openai-api-key'
+resource azureOpenAISecret 'Microsoft.KeyVault/vaults/secrets@2019-09-01' = {
+  name: 'azure-openai-api-key'
+  parent: keyVault
+  properties: {
+    value: azureOpenAIAccount.listKeys().key1
+  }
+}
+
 // Grant pullIdentity permission to read secrets in Key Vault (Key Vault Secrets User)
 resource kvSecretsUserRA 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(keyVault.id, pullIdentity.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6'))
@@ -200,6 +211,7 @@ resource gpt4o 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
     model: {
       format: 'OpenAI'
       name: 'gpt-4o'
+      version: azureOpenAIModelVersion
     }
     currentCapacity: 100
   }
@@ -247,7 +259,8 @@ resource app 'Microsoft.App/containerApps@2024-02-02-preview' = {
       secrets: [
         {
           name: 'azure-openai-api-key'
-          value: azureOpenAIAccount.listKeys().key1
+          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/azure-openai-api-key'
+          identity: pullIdentity.id
         }
         {
           name: 'tavily-api-key'
@@ -270,7 +283,7 @@ resource app 'Microsoft.App/containerApps@2024-02-02-preview' = {
       containers: [
         {
           name: resourceNames.containerAppName
-          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest' // placeholder; azd deploy will override
           env: [
             { name: 'OPENAI_API_KEY', secretRef: 'azure-openai-api-key' }
             { name: 'AZURE_OPENAI_ENDPOINT', value: azureOpenAIAccount.properties.endpoint }
@@ -307,6 +320,7 @@ resource app 'Microsoft.App/containerApps@2024-02-02-preview' = {
     tavilySecret
     mem0Secret
     redisUrlSecret
+    azureOpenAISecret
   ]
 }
 
