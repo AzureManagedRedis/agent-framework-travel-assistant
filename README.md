@@ -11,15 +11,6 @@ A travel planning assistant with dual-layer memory: Redis-backed chat history an
 - **Gradio UI**: Chat, user tabs, live agent event logs, clear‑chat control
 - **Configurable**: Pydantic settings via environment variables, `.env` support
 
-## Recommended Demo Flow
-
-Try the following query flow to test the agent!
-1. Can you recommend things to do in Lisbon based on online opinion?
-2. Can you find a flight leaving on the 14th of January 2026 and returning on the 16th?
-3. How about a hotel for the stay? 
-4. Okay, put together an itinerary and give me a calendar.
-5. Click the Open Calendar button to add the routine to your schedule!
-
 ## 🧩 Architecture overview
 - `gradio_app.py`: Launches the Gradio app, builds UI, wires event streaming, calendar open, and user switching
 - `agent.py`: Implements `TravelAgent` using Agent Framework
@@ -30,6 +21,10 @@ Try the following query flow to test the agent!
 - `context/seed.json`: Seeded users and initial long‑term memory entries
 - `assets/styles.css`: Custom theme and styling
 
+A diagram of a software company:
+
+
+
 ## ✅ Prerequisites
 - Python >=3.11 
 - Redis instance (local Docker, Redis Cloud, or Azure Managed Redis)
@@ -39,11 +34,12 @@ Try the following query flow to test the agent!
 Provide via your environment or a `.env` file in the project root. Minimum required:
 - `OPENAI_API_KEY` (must start with `sk-`; validated)
 - `TAVILY_API_KEY`
-- `MEM0_API_KEY`
+- `MEM0_CLOUD` (default `false`). If `true`, you must set `MEM0_API_KEY` and Mem0 Cloud will be used. If `false`, local Mem0 runs with Redis vector store.
+- `MEM0_API_KEY` (required only when `MEM0_CLOUD=true`)
 
 Recommended/optional overrides (defaults shown):
 - `TRAVEL_AGENT_MODEL` = `gpt-4o-mini`
-- `MEM0_MODEL` = `gpt-5-nano`
+- `MEM0_MODEL` = `gpt-4o-mini`
 - `MEM0_EMBEDDING_MODEL` = `text-embedding-3-small`
 - `MEM0_EMBDDING_MODEL_DIMS` = `1536`
 - `REDIS_URL` = `redis://localhost:6379`
@@ -57,7 +53,9 @@ Example `.env` template:
 ```env
 OPENAI_API_KEY=sk-...
 TAVILY_API_KEY=...
-MEM0_API_KEY=...
+MEM0_CLOUD=false
+# If using Mem0 Cloud, set the API key and flip the flag above to true
+# MEM0_API_KEY=...
 REDIS_URL=redis://localhost:6379
 TRAVEL_AGENT_MODEL=gpt-4o-mini
 MEM0_MODEL=gpt-5-nano
@@ -70,13 +68,24 @@ SERVER_PORT=7860
 SHARE=false
 ```
 
+### 🧠 Mem0 modes
+- **Local (default)**: `MEM0_CLOUD=false`
+  - Uses Redis as the vector store defined by `REDIS_URL`
+  - Embeddings and LLM calls use your OpenAI key and the configured models
+- **Cloud**: `MEM0_CLOUD=true`
+  - Uses Mem0 Cloud. You must set `MEM0_API_KEY`
+  - No Redis vector store is used for long‑term memory (Redis is still used for chat history)
+
 ## 🗄️ Redis setup options
+- Azure Managed Redis: This is an easy way to get a fully managed service that runs natively on Azure. You will require an Azure subscription to get started. Achieve unmatched performance with costs as low as USD 12 per month. Alternative methods for deploying Redis are outlined below. See quickstart guide through Azure portal: https://learn.microsoft.com/en-us/azure/redis/quickstart-create-managed-redis
+
+  Note: Enable access key-based authentication on your cache if you want to run the agent locally. Note the endpoint URL and the password; this will be used later.
+  
 - Local (Docker):
 ```bash
 docker run --name redis -p 6379:6379 -d redis:8.0.3
 ```
 - Redis Cloud: create a free database and set `REDIS_URL`
-- Azure Managed Redis: see Microsoft quickstart (entry tier works)
 
 To clear all app data in Redis (chat history, summaries):
 ```bash
@@ -136,6 +145,21 @@ Example `context/seed.json`:
 - When an itinerary is finalized, the agent can export an `.ics` file
 - Click “Open Calendar” to open the per‑user calendars folder in your OS file explorer
 - Files are stored under `assets/calendars/<USER_ID>/`
+
+## Recommended user flow
+
+Try the following query flow to see the agent in action:
+
+### Blank User (Mark) - No preferences (cold start case)
+1. I like bears and the places where bears can be found. 
+2. I think Christmas is quite a magical time of year and I enjoy visiting winter wonderland villages
+3. What's a place to visit that I might like?
+4. Can you give me a solid 3 day itinerary based on online recommendations? For what to do in (Pick one of the locations it mentions) 
+5. Okay, can you recommend a flight and hotel? I live in (Pick a location) and I'm going to leave on 22nd December and will return 26th December. 
+6. Give me the calendar. 
+
+### Pre-filled User (Shreya) - User preferences known at startup
+1. I'm planning to hit up Redis Released in London this year. Can you find more info about it?
 
 ## 🐛 Troubleshooting
 - Missing API keys: app exits with a configuration error and hints for `.env`

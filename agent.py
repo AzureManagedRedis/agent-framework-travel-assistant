@@ -24,6 +24,42 @@ import re
 import hashlib
 from queue import Queue
 
+
+# ------------------------------
+# Global debugging helpers: always print full tracebacks
+# ------------------------------
+def _global_excepthook(exc_type, exc_value, exc_traceback):
+    try:
+        if issubclass(exc_type, KeyboardInterrupt):
+            return sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        print("\ud83d\udea9 Unhandled exception in agent.py", flush=True)
+        traceback.print_exception(exc_type, exc_value, exc_traceback)
+    except Exception:
+        pass
+
+def _asyncio_exception_handler(loop, context):
+    try:
+        msg = context.get("message")
+        exc = context.get("exception")
+        if msg:
+            print(f"\ud83d\udea9 Unhandled asyncio exception: {msg}", flush=True)
+        else:
+            print("\ud83d\udea9 Unhandled asyncio exception", flush=True)
+        if exc:
+            traceback.print_exception(type(exc), exc, getattr(exc, "__traceback__", None))
+    except Exception:
+        pass
+
+try:
+    sys.excepthook = _global_excepthook  # type: ignore[assignment]
+    try:
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(_asyncio_exception_handler)
+    except Exception:
+        pass
+except Exception:
+    pass
+
 from tavily import TavilyClient
 from ics import Calendar, Event, DisplayAlarm
 from ics.grammar.parse import ContentLine
@@ -37,6 +73,8 @@ from agent_framework._tools import ai_function
 from agent_framework_mem0 import Mem0Provider
 from agent_framework_redis._chat_message_store import RedisChatMessageStore
 from agent_framework.exceptions import ServiceResponseException
+from mem0 import AsyncMemoryClient, AsyncMemory
+from mem0.configs.base import MemoryConfig
 
 from config import AppConfig
 from utils.ui_events import emit_ui_event
@@ -44,25 +82,49 @@ from utils.ui_events import emit_ui_event
 
 
 class NonBlockingMem0Provider(Mem0Provider):
-    """Mem0 provider that does not block on messages_adding.
+    """Mem0 provider that performs post-invoke add in the background.
 
-    Schedules the underlying add operation as a background task so agent
-    streaming can complete without waiting for Mem0's LLM post-processing.
+    Uses the framework's invoked hook to capture messages and schedules the
+    Mem0 add on a background task so streaming isn't blocked.
     """
 
-    async def messages_adding(self, thread_id, new_messages) -> None:  # type: ignore[override]
+    async def invoked(self, request_messages, response_messages=None, invoke_exception=None, **kwargs):  # type: ignore[override]
         try:
-            asyncio.create_task(self._messages_adding_bg(thread_id, new_messages))
+            asyncio.create_task(super().invoked(request_messages, response_messages, invoke_exception, **kwargs))
         except Exception:
-            # Best-effort: background scheduling failed, ignore to avoid blocking user flow
+            # Best-effort: background scheduling failed; don't block user flow
             pass
 
-    async def _messages_adding_bg(self, thread_id, new_messages) -> None:
+    async def invoking(self, messages, **kwargs):  # type: ignore[override]
+        # Retrieve context from base provider, then truncate to keep token usage bounded
+        ctx = await super().invoking(messages, **kwargs)
         try:
-            await super().messages_adding(thread_id, new_messages)
-        except Exception as e:
-            # Log and swallow to prevent errors bubbling up from background task
-            print(f"⚠️ Mem0 background add failed: {e}")
+            MAX_LINES = 12
+            MAX_CHARS = 2000
+            if not ctx:
+                return ctx
+            txt_parts = []
+            # Prefer messages content if present (Mem0Provider uses messages field)
+            try:
+                for m in list(getattr(ctx, "messages", []) or []):
+                    t = getattr(m, "text", None)
+                    if t:
+                        txt_parts.append(t)
+            except Exception:
+                pass
+            full_text = "\n".join([p for p in txt_parts if p])
+            if not full_text:
+                return ctx
+            lines = [ln for ln in full_text.splitlines() if ln.strip()]
+            trimmed = "\n".join(lines[:MAX_LINES])
+            if len(trimmed) > MAX_CHARS:
+                trimmed = trimmed[:MAX_CHARS] + "…"
+            from agent_framework import ChatMessage  # local import to avoid top-level cycles
+            new_msg = ChatMessage(role="user", text=trimmed)
+            from agent_framework import Context  # type: ignore
+            return Context(messages=[new_msg]) if trimmed else ctx
+        except Exception:
+            return ctx
 
 
 class _SanitizingChatMessageStore:
@@ -90,11 +152,19 @@ class _SanitizingChatMessageStore:
     async def add_messages(self, messages: List[ChatMessage]) -> None:
         await self._inner.add_messages(messages)
 
-    async def serialize_state(self, **kwargs: Any) -> Any:
-        return await self._inner.serialize_state(**kwargs)
+    async def serialize(self, **kwargs: Any) -> Any:
+        return await self._inner.serialize(**kwargs)
 
-    async def deserialize_state(self, serialized_store_state: Any, **kwargs: Any) -> None:
-        await self._inner.deserialize_state(serialized_store_state, **kwargs)
+    @classmethod
+    async def deserialize(cls, serialized_store_state: Any, **kwargs: Any) -> "_SanitizingChatMessageStore":
+        inner = await RedisChatMessageStore.deserialize(serialized_store_state, **kwargs)
+        return cls(inner)
+
+    async def update_from_state(self, serialized_store_state: Any, **kwargs: Any) -> None:
+        await self._inner.update_from_state(serialized_store_state, **kwargs)
+
+    async def clear(self) -> None:
+        await self._inner.clear()
 
     def _sanitize_messages(self, messages: List[ChatMessage]) -> List[ChatMessage]:
         """Return messages pruned to a sequence valid for OpenAI tool-calls."""
@@ -193,15 +263,16 @@ class TravelAgent:
         # Set environment variables for SDK clients
         os.environ["OPENAI_API_KEY"] = config.azure_openai_api_key
         os.environ["TAVILY_API_KEY"] = config.tavily_api_key
-        # Azure OpenAI specific
-        os.environ["AZURE_OPENAI_ENDPOINT"] = config.azure_openai_endpoint
-        os.environ["AZURE_OPENAI_API_VERSION"] = config.azure_openai_api_version
+        try:
+            os.environ["MEM0_API_KEY"] = config.MEM0_API_KEY
+        except Exception:
+            pass
 
         # Initialize shared clients
         self.tavily_client = TavilyClient(api_key=config.tavily_api_key)
         self.chat_client = OpenAIResponsesClient(
-            ai_model_id=config.travel_agent_model,
-            api_key=config.azure_openai_api_key,
+            model_id=config.travel_agent_model,
+            api_key=config.openai_api_key,
         )
 
         # Initialize user context cache
@@ -218,14 +289,49 @@ class TravelAgent:
     def _create_mem0_provider(self, user_id: str) -> Mem0Provider:
         """Create a Mem0 provider instance bound to a specific user/thread."""
         print(f"🧠 Creating Mem0 provider for user: {user_id}")
-        # Uses MEM0_API_KEY from env by default
+        
+        mem0_client = self._build_mem0_client()
         return NonBlockingMem0Provider(
             user_id=user_id,
             thread_id=f"user:{user_id}",
             context_prompt=(
                 "Relevant durable traveler facts and preferences (use to personalize replies):"
             ),
+            mem0_client=mem0_client,
         )
+
+    def _build_mem0_client(self):
+        """Create a Mem0 client according to configuration (cloud vs local)."""
+        if getattr(self.config, "mem0_cloud", False):
+            # Mem0 Cloud
+            return AsyncMemoryClient(api_key=self.config.MEM0_API_KEY)
+        # Local Mem0 with Redis vector store
+        cfg = {
+            "vector_store": {
+                "provider": "redis",
+                "config": {
+                    "collection_name": "mem0",
+                    "embedding_model_dims": self.config.mem0_embedding_model_dims,
+                    "redis_url": self.config.redis_url
+                }
+            },
+            "embedder": {
+                "provider": "openai",
+                "config": {
+                    "model": self.config.mem0_embedding_model,
+                    "api_key": self.config.openai_api_key
+                }
+            },
+            "llm": {
+                "provider": "openai",
+                "config": {
+                    "model": self.config.mem0_model,
+                    "api_key": self.config.openai_api_key
+                }
+            }
+        }
+        mem_cfg = MemoryConfig(**cfg)
+        return AsyncMemory(config=mem_cfg)
 
     def _get_or_create_user_ctx(self, user_id: str) -> UserCtx:
         """Return a cached or new `UserCtx` with memory, agent, and history store.
@@ -322,6 +428,10 @@ class TravelAgent:
                 print(f"✅ Seeded {len(memories)} memories via Mem0 for user: {user_id}")
             except Exception as e:
                 print(f"❌ Failed to seed memory for user {user_id}: {e}")
+                try:
+                    traceback.print_exc()
+                except Exception:
+                    pass
                 continue
 
     def _create_agent(
@@ -410,7 +520,7 @@ class TravelAgent:
         """Return the supervisor system message with roles, tool guidance, and style."""
         today = datetime.utcnow().strftime("%Y-%m-%d")
         return (
-            f"You are an expert, time-aware, friendly Travel Concierge AI. Today is {today} (UTC). "
+            f"You are an expert, time-aware, friendly Travel Concierge AI. Today is {today} (UTC). Always be aware that this is the current date and time."
             "Assume your built in knowledge may be outdated; for anything time-sensitive, verify with tools.\n\n"
             "ROLE:\n"
             "- Discover destinations, plan itineraries, recommend accommodations, and organize logistics on behalf of the user.\n"
@@ -424,6 +534,8 @@ class TravelAgent:
             "- Use testing_tool_call when the user asks you to verify tool calling capability or to run a diagnostic test.\n"
             "- Prefer recent sources (past 12–24 months) and pass explicit dates to tools whenever the user provides a time window.\n"
             "DISCOVERY:\n"
+            "- Lead with leading questions to discover user's likes, dislikes, travel-related preferences, and more.\n"
+            "- These can be related to flights, hotels, locations, dates, seasons, types of activities, etc...\n"
             "- If missing details, ask targeted questions (exact dates or window, origin/destination, budget, party size, interests,\n"
             "  lodging preferences, accessibility, loyalty programs).\n\n"
             "OUTPUT STYLE:\n"
@@ -577,6 +689,10 @@ class TravelAgent:
             error_msg = f"❌ {search_type.upper()} ERROR: {str(e)}"
             print(error_msg, flush=True)
             try:
+                traceback.print_exc()
+            except Exception:
+                pass
+            try:
                 emit_ui_event("tool_log", "❌", f"{title} error", str(e))
             except Exception:
                 pass
@@ -727,6 +843,10 @@ class TravelAgent:
                 error_msg = f"❌ CALENDAR ERROR: {str(e)}"
                 print(error_msg, flush=True)
                 try:
+                    traceback.print_exc()
+                except Exception:
+                    pass
+                try:
                     emit_ui_event("tool_log", "❌", "generate_calendar_ics error", str(e))
                 except Exception:
                     pass
@@ -801,6 +921,10 @@ class TravelAgent:
             
         except Exception as e:
             print(f"   ⚠️ Event creation failed: {e}", flush=True)
+            try:
+                traceback.print_exc()
+            except Exception:
+                pass
             return None
 
     # -----------------
@@ -980,30 +1104,81 @@ class TravelAgent:
         yield buffer, _event("user_message", "", "User message sent", f'"{user_message}"')
 
         # Emit context retrieval/submission info similar to ChatAgent.run_stream
-        async def _contents_to_text(contents: list[Any]) -> str:
+        def _provider_context_to_text(provider_ctx: Any) -> str:
             parts: list[str] = []
-            for it in contents or []:
-                try:
-                    t = getattr(it, "text", None)
-                    if t:
-                        parts.append(t)
-                except Exception:
-                    continue
-            return "\n".join(parts).strip()
+            try:
+                # Include any explicit instructions
+                instr = getattr(provider_ctx, "instructions", None)
+                if isinstance(instr, str) and instr.strip():
+                    parts.append(instr.strip())
+            except Exception:
+                pass
+            try:
+                # Include messages' text from Context.messages
+                msgs = list(getattr(provider_ctx, "messages", []) or [])
+                for m in msgs:
+                    try:
+                        t = getattr(m, "text", None)
+                        if t:
+                            parts.append(t)
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+            return "\n".join([p for p in parts if p]).strip()
 
         try:
             input_messages = ctx.agent._normalize_messages(user_message)  # use same normalization
-            cp = getattr(ctx.agent, "context_providers", None)
-            if cp is not None:
-                provider_ctx = await cp.model_invoking(input_messages)
-                if provider_ctx and getattr(provider_ctx, "contents", None):
-                    ctx_text = await _contents_to_text(getattr(provider_ctx, "contents", []) or [])
+            cp_agg = getattr(ctx.agent, "context_provider", None)
+            if cp_agg is not None:
+                provider_ctx = None
+                try:
+                    provider_ctx = await cp_agg.invoking(input_messages)
+                except RuntimeError as re:
+                    if "Event loop is closed" in str(re):
+                        # Reinitialize mem0 clients bound to a possibly closed loop and retry once
+                        try:
+                            providers = list(getattr(cp_agg, "providers", []))
+                            for prov in providers:
+                                try:
+                                    from agent_framework_mem0 import Mem0Provider as _AFMem0Provider  # type: ignore
+                                except Exception:
+                                    _AFMem0Provider = Mem0Provider  # fallback to already imported
+                                if isinstance(prov, _AFMem0Provider):
+                                    try:
+                                        # Rebuild according to current config (cloud/local)
+                                        prov.mem0_client = self._build_mem0_client()
+                                    except Exception:
+                                        pass
+                            provider_ctx = await cp_agg.invoking(input_messages)
+                            try:
+                                yield buffer, _event("tool_log", "🧠", "Mem0 client reset", "Recovered from closed event loop")
+                            except Exception:
+                                pass
+                        except Exception as _reset_e:
+                            raise _reset_e
+                    else:
+                        raise
+                if provider_ctx:
+                    ctx_text = _provider_context_to_text(provider_ctx)
                     if ctx_text:
                         snippet = ctx_text if len(ctx_text) <= 600 else (ctx_text[:600] + "…")
                         yield buffer, _event("context_retrieved", "🧠", "Context retrieved", snippet)
                         yield buffer, _event("context_submitted", "📎", "Context submitted", "Included retrieved context in system message")
-        except Exception:
-            pass
+                    else:
+                        # Invoked but no memories were returned
+                        yield buffer, _event("tool_log", "🧠", "Mem0 retrieval", "0 memories found")
+            else:
+                print("No context provider found")
+        except Exception as e:
+            try:
+                yield buffer, _event("tool_log", "❌", "Mem0 retrieval error", str(e))
+            except Exception:
+                pass
+            try:
+                traceback.print_exc()
+            except Exception:
+                pass
 
         try:
             yield buffer, _event("llm_response_start", "", "LLM thinking", f"LLM receives user input")
@@ -1054,22 +1229,33 @@ class TravelAgent:
                             display_line = ""
                         if not display_line:
                             continue
-                        # Parse structured UI events if present
-                        if display_line.startswith("UI_EVENT "):
-                            try:
-                                payload = json.loads(display_line[len("UI_EVENT "):])
-                                await event_queue.put({
-                                    "type": payload.get("type") or "tool_log",
-                                    "html": _html(
-                                        payload.get("icon") or "",
-                                        payload.get("title") or "",
-                                        payload.get("message") or "",
-                                    ),
-                                    **{k: v for k, v in payload.items() if k not in {"type", "icon", "title", "message"}},
-                                })
+                        # Parse structured UI events; handle multiple concatenated events in one line
+                        if "UI_EVENT " in display_line:
+                            handled_any = False
+                            parts = display_line.split("UI_EVENT ")
+                            for raw in parts[1:]:
+                                chunk = (raw or "").strip()
+                                if not chunk:
+                                    continue
+                                try:
+                                    payload = json.loads(chunk)
+                                except Exception:
+                                    continue
+                                handled_any = True
+                                try:
+                                    await event_queue.put({
+                                        "type": payload.get("type") or "tool_log",
+                                        "html": _html(
+                                            payload.get("icon") or "",
+                                            payload.get("title") or "",
+                                            payload.get("message") or "",
+                                        ),
+                                        **{k: v for k, v in payload.items() if k not in {"type", "icon", "title", "message"}},
+                                    })
+                                except Exception:
+                                    pass
+                            if handled_any:
                                 continue
-                            except Exception:
-                                pass
                         # Fallback plain log line
                         await event_queue.put({
                             "type": "tool_log",
@@ -1236,13 +1422,6 @@ class TravelAgent:
 
         # Final yield to ensure thinking animation is removed
         if buffer:
-            # Schedule background memory add and emit UI event
-            try:
-                asyncio.create_task(self.store_memory(user_id, user_message))
-                yield buffer, _event("memory_add", "🧠", "Adding interaction to memory", "Queued for background storage")
-            except Exception:
-                pass
-
             yield buffer, _event("llm_response_end", "✅", f"LLM finished streaming", "")
             yield buffer, None
 
@@ -1251,25 +1430,7 @@ class TravelAgent:
     # Utility Methods
     # -----------------
 
-    async def store_memory(self, user_id: str, user_message: str) -> None:
-        """Store user message in memory via background task (non-blocking)."""
-        async def _bg() -> None:
-            try:
-                ctx = self._get_or_create_user_ctx(user_id)
-                await ctx.mem0_provider.mem0_client.add(
-                    messages=[{"role": "user", "content": user_message}],
-                    user_id=user_id,
-                    run_id=ctx.mem0_provider.thread_id,
-                    metadata={"source": "chat"},
-                )
-            except Exception as e:
-                print(f"⚠️ Failed to store conversation memory for user {user_id}: {e}")
-
-        try:
-            asyncio.create_task(_bg())
-        except Exception:
-            # If task scheduling fails, ignore to keep UI responsive
-            pass
+    # Mem0 storage is handled by the context provider's invoked hook.
 
     async def get_chat_history(self, user_id: str, n: Optional[int] = None) -> List[Dict[str, str]]:
         """Retrieve chat history for a user from Redis storage.
@@ -1323,6 +1484,10 @@ class TravelAgent:
             return gradio_messages
         except Exception as e:
             print(f"Error retrieving chat history for user {user_id}: {e}")
+            try:
+                traceback.print_exc()
+            except Exception:
+                pass
             return []
 
     def user_exists(self, user_id: str) -> bool:
