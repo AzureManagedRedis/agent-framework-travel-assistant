@@ -24,6 +24,7 @@ import re
 import hashlib
 from queue import Queue
 
+
 # ------------------------------
 # Global debugging helpers: always print full tracebacks
 # ------------------------------
@@ -72,7 +73,8 @@ from agent_framework._tools import ai_function
 from agent_framework_mem0 import Mem0Provider
 from agent_framework_redis._chat_message_store import RedisChatMessageStore
 from agent_framework.exceptions import ServiceResponseException
-from mem0 import AsyncMemoryClient
+from mem0 import AsyncMemoryClient, AsyncMemory
+from mem0.configs.base import MemoryConfig
 
 from config import AppConfig
 from utils.ui_events import emit_ui_event
@@ -287,8 +289,8 @@ class TravelAgent:
     def _create_mem0_provider(self, user_id: str) -> Mem0Provider:
         """Create a Mem0 provider instance bound to a specific user/thread."""
         print(f"🧠 Creating Mem0 provider for user: {user_id}")
-        # Create a persistent Mem0 client so background tasks are not racing a closed client
-        mem0_client = AsyncMemoryClient(api_key=self.config.MEM0_API_KEY)
+        
+        mem0_client = self._build_mem0_client()
         return NonBlockingMem0Provider(
             user_id=user_id,
             thread_id=f"user:{user_id}",
@@ -297,6 +299,39 @@ class TravelAgent:
             ),
             mem0_client=mem0_client,
         )
+
+    def _build_mem0_client(self):
+        """Create a Mem0 client according to configuration (cloud vs local)."""
+        if getattr(self.config, "mem0_cloud", False):
+            # Mem0 Cloud
+            return AsyncMemoryClient(api_key=self.config.MEM0_API_KEY)
+        # Local Mem0 with Redis vector store
+        cfg = {
+            "vector_store": {
+                "provider": "redis",
+                "config": {
+                    "collection_name": "mem0",
+                    "embedding_model_dims": self.config.mem0_embedding_model_dims,
+                    "redis_url": self.config.redis_url
+                }
+            },
+            "embedder": {
+                "provider": "openai",
+                "config": {
+                    "model": self.config.mem0_embedding_model,
+                    "api_key": self.config.openai_api_key
+                }
+            },
+            "llm": {
+                "provider": "openai",
+                "config": {
+                    "model": self.config.mem0_model,
+                    "api_key": self.config.openai_api_key
+                }
+            }
+        }
+        mem_cfg = MemoryConfig(**cfg)
+        return AsyncMemory(config=mem_cfg)
 
     def _get_or_create_user_ctx(self, user_id: str) -> UserCtx:
         """Return a cached or new `UserCtx` with memory, agent, and history store.
@@ -1111,7 +1146,8 @@ class TravelAgent:
                                     _AFMem0Provider = Mem0Provider  # fallback to already imported
                                 if isinstance(prov, _AFMem0Provider):
                                     try:
-                                        prov.mem0_client = AsyncMemoryClient(api_key=self.config.MEM0_API_KEY)
+                                        # Rebuild according to current config (cloud/local)
+                                        prov.mem0_client = self._build_mem0_client()
                                     except Exception:
                                         pass
                             provider_ctx = await cp_agg.invoking(input_messages)

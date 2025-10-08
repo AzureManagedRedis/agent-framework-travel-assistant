@@ -34,7 +34,8 @@ A diagram of a software company:
 Provide via your environment or a `.env` file in the project root. Minimum required:
 - `OPENAI_API_KEY` (must start with `sk-`; validated)
 - `TAVILY_API_KEY`
-- `MEM0_API_KEY`
+- `MEM0_CLOUD` (default `false`). If `true`, you must set `MEM0_API_KEY` and Mem0 Cloud will be used. If `false`, local Mem0 runs with Redis vector store.
+- `MEM0_API_KEY` (required only when `MEM0_CLOUD=true`)
 
 Recommended/optional overrides (defaults shown):
 - `TRAVEL_AGENT_MODEL` = `gpt-4o-mini`
@@ -52,7 +53,9 @@ Example `.env` template:
 ```env
 OPENAI_API_KEY=sk-...
 TAVILY_API_KEY=...
-MEM0_API_KEY=...
+MEM0_CLOUD=false
+# If using Mem0 Cloud, set the API key and flip the flag above to true
+# MEM0_API_KEY=...
 REDIS_URL=redis://localhost:6379
 TRAVEL_AGENT_MODEL=gpt-4o-mini
 MEM0_MODEL=gpt-5-nano
@@ -64,6 +67,14 @@ SERVER_NAME=0.0.0.0
 SERVER_PORT=7860
 SHARE=false
 ```
+
+### 🧠 Mem0 modes
+- **Local (default)**: `MEM0_CLOUD=false`
+  - Uses Redis as the vector store defined by `REDIS_URL`
+  - Embeddings and LLM calls use your OpenAI key and the configured models
+- **Cloud**: `MEM0_CLOUD=true`
+  - Uses Mem0 Cloud. You must set `MEM0_API_KEY`
+  - No Redis vector store is used for long‑term memory (Redis is still used for chat history)
 
 ## 🗄️ Redis setup options
 - Azure Managed Redis: This is an easy way to get a fully managed service that runs natively on Azure. You will require an Azure subscription to get started. Achieve unmatched performance with costs as low as USD 12 per month. Alternative methods for deploying Redis are outlined below. See quickstart guide through Azure portal: https://learn.microsoft.com/en-us/azure/redis/quickstart-create-managed-redis

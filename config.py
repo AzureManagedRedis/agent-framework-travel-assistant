@@ -8,7 +8,7 @@ import warnings
 warnings.filterwarnings("ignore")
 import os
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -34,12 +34,16 @@ class AppConfig(BaseSettings):
     # Redis Configuration
     redis_url: str = Field(default="redis://localhost:6379", env="REDIS_URL", description="Redis connection URL")
     
+    # Mem0 mode selection
+    mem0_cloud: bool = Field(default=False, env="MEM0_CLOUD", description="Use Mem0 Cloud when true; otherwise use local Mem0 with Redis vector store")
+
     # Server Configuration
     server_name: str = Field(default="0.0.0.0", env="SERVER_NAME", description="Server host")
     server_port: int = Field(default=7860, env="SERVER_PORT", description="Server port")
     share: bool = Field(default=False, env="SHARE", description="Enable public sharing")
 
-    MEM0_API_KEY: str = Field(..., env="MEM0_API_KEY", description="Mem0 API key")
+    # Optional unless using Mem0 Cloud
+    MEM0_API_KEY: Optional[str] = Field(default=None, env="MEM0_API_KEY", description="Mem0 API key (required if MEM0_CLOUD=true)")
     
     class Config:
         """Pydantic config."""
@@ -56,6 +60,12 @@ class AppConfig(BaseSettings):
             raise ValueError("OpenAI API key must start with 'sk-'")
         return v
     
+    @model_validator(mode="after")
+    def validate_mem0_requirements(self):  # type: ignore[override]
+        """Ensure MEM0_API_KEY is present when using Mem0 Cloud."""
+        if self.mem0_cloud and not (self.MEM0_API_KEY and self.MEM0_API_KEY.strip()):
+            raise ValueError("MEM0_API_KEY is required when MEM0_CLOUD is true")
+        return self
 
 
 
