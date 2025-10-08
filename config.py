@@ -16,9 +16,13 @@ class AppConfig(BaseSettings):
     """Application configuration with validation."""
     
     # API Keys
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY", description="OpenAI API key")
+    azure_openai_api_key: str = Field(..., env="AZURE_OPENAI_API_KEY", description="Azure OpenAI API key")
     tavily_api_key: str = Field(..., env="TAVILY_API_KEY", description="Tavily API key")
 
+    azure_openai_base_url: str = Field(..., env="AZURE_OPENAI_BASE_URL", description="Azure OpenAI Base URL")
+    azure_openai_api_version: str = Field(default="2024-06-01", env="AZURE_OPENAI_API_VERSION", description="Azure OpenAI API version")
+    azure_openai_endpoint: str = Field(default="", env="AZURE_OPENAI_ENDPOINT", description="Azure OpenAI Endpoint")
+    
     # Model Configuration
     travel_agent_model: str = Field(default="gpt-4.1", env="TRAVEL_AGENT_MODEL", description="OpenAI model name for the travel agent")
     mem0_model: str = Field(default="gpt-4.1-mini", env="MEM0_MODEL", description="OpenAI LLM name for the travel agent memory system")
@@ -89,7 +93,9 @@ def validate_dependencies() -> bool:
     
     # Test OpenAI API
     try:
-        client = OpenAI(api_key=config.openai_api_key)
+        
+        client = OpenAI(api_key=config.azure_openai_api_key,
+                        base_url = config.azure_openai_base_url)
         # Just test the client creation, not making an actual API call
         print("✅ OpenAI API key configured")
     except Exception as e:

@@ -65,7 +65,7 @@ from ics import Calendar, Event, DisplayAlarm
 from ics.grammar.parse import ContentLine
 
 # Agent Framework imports
-from agent_framework.openai import OpenAIChatClient, OpenAIResponsesClient
+from agent_framework.azure import AzureOpenAIResponsesClient
 from agent_framework import ChatMessage, Role, TextContent
 from agent_framework import FunctionCallContent, FunctionResultContent
 from agent_framework._middleware import agent_middleware, AgentRunContext
@@ -261,7 +261,7 @@ class TravelAgent:
         self.config = config
 
         # Set environment variables for SDK clients
-        os.environ["OPENAI_API_KEY"] = config.azure_openai_api_key
+        os.environ["AZURE_OPENAI_API_KEY"] = config.azure_openai_api_key
         os.environ["TAVILY_API_KEY"] = config.tavily_api_key
         try:
             os.environ["MEM0_API_KEY"] = config.MEM0_API_KEY
@@ -270,9 +270,12 @@ class TravelAgent:
 
         # Initialize shared clients
         self.tavily_client = TavilyClient(api_key=config.tavily_api_key)
-        self.chat_client = OpenAIResponsesClient(
-            model_id=config.travel_agent_model,
-            api_key=config.openai_api_key,
+
+        self.chat_client = AzureOpenAIResponsesClient(
+            endpoint=config.azure_openai_endpoint,
+            deployment_name=config.travel_agent_model,
+            api_version=config.azure_openai_api_version,
+            api_key=config.azure_openai_api_key
         )
 
         # Initialize user context cache
