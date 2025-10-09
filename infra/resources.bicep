@@ -19,7 +19,6 @@ param mem0ApiKey string
 // Non-secure configuration params
 param travelAgentModel string = 'demo-gpt-4o'
 param mem0Model string = 'gpt-4o-mini'
-param mem0EmbeddingModel string = 'text-embedding-3-small'
 param mem0EmbeddingModelDims int = 1536
 param maxToolIterations int = 8
 param maxChatHistorySize int = 10
@@ -30,11 +29,26 @@ param serverName string = '0.0.0.0'
 
 param serverPort string = '7860'
 
-param azureOpenAIApiVersion string = '2024-08-01-preview'
+param azureOpenAIApiVersion string = '2024-12-01-preview'
 
 param azureOpenAIModelVersion string = '2024-08-06'
 
+// Deployment name for the embeddings model used by Mem0
+param mem0EmbeddingDeploymentName string = 'demo-emb-3-small'
+// Optional: version for the embeddings model (many embeddings do not require a version)
+param azureOpenAIEmbeddingModelVersion string = ''
+
 var resourceToken = uniqueString(resourceGroup().id)
+
+// Build embeddings model object conditionally including version only when provided
+var embeddingModel = empty(azureOpenAIEmbeddingModelVersion) ? {
+  format: 'OpenAI'
+  name: 'text-embedding-3-small'
+} : {
+  format: 'OpenAI'
+  name: 'text-embedding-3-small'
+  version: azureOpenAIEmbeddingModelVersion
+}
 
 var resourceNames = {
   logAnalyticsWorkspaceName : 'log-${resourceToken}'
@@ -127,6 +141,9 @@ resource azureOpenAISecret 'Microsoft.KeyVault/vaults/secrets@2019-09-01' = {
   properties: {
     value: azureOpenAIAccount.listKeys().key1
   }
+  dependsOn: [
+    azureOpenAIAccount
+  ]
 }
 
 // Grant pullIdentity permission to read secrets in Key Vault (Key Vault Secrets User)
@@ -218,6 +235,24 @@ resource gpt4o 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   tags: tags
 }
 
+// Embeddings deployment for Mem0 (text-embedding-3-small)
+resource embSmall 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: azureOpenAIAccount
+  name: mem0EmbeddingDeploymentName
+  sku: {
+    name: 'Standard'
+    capacity: 1
+  }
+  properties: {
+    model: embeddingModel
+    currentCapacity: 1
+  }
+  tags: tags
+  dependsOn: [
+    gpt4o
+  ]
+}
+
 resource env 'Microsoft.App/managedEnvironments@2024-02-02-preview' = {
   name: resourceNames.containerAppEnvironmentName
   location: location
@@ -285,17 +320,20 @@ resource app 'Microsoft.App/containerApps@2024-02-02-preview' = {
           name: resourceNames.containerAppName
           image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest' // placeholder; azd deploy will override
           env: [
+            { name: 'OPENAI_API_KEY', secretRef: 'azure-openai-api-key' }
             { name: 'AZURE_OPENAI_API_KEY', secretRef: 'azure-openai-api-key' }
             { name: 'AZURE_OPENAI_ENDPOINT', value: azureOpenAIAccount.properties.endpoint }
+            { name: 'OPENAI_BASE_URL', value: '${azureOpenAIAccount.properties.endpoint}openai/v1/' }
             { name: 'AZURE_OPENAI_BASE_URL', value: '${azureOpenAIAccount.properties.endpoint}openai/v1/' }
             { name: 'AZURE_OPENAI_API_VERSION', value: azureOpenAIApiVersion }
+            { name: 'OPENAI_API_VERSION', value: azureOpenAIApiVersion }
             { name: 'TAVILY_API_KEY', secretRef: 'tavily-api-key' }
             { name: 'MEM0_API_KEY', secretRef: 'mem0-api-key' }
             { name: 'SERVER_NAME', value: serverName }
             { name: 'SERVER_PORT', value: serverPort }
             { name: 'TRAVEL_AGENT_MODEL', value: travelAgentModel }
             { name: 'MEM0_MODEL', value: mem0Model }
-            { name: 'MEM0_EMBEDDING_MODEL', value: mem0EmbeddingModel }
+            { name: 'MEM0_EMBEDDING_MODEL', value: mem0EmbeddingDeploymentName }
             { name: 'MEM0_EMBEDDING_MODEL_DIMS', value: string(mem0EmbeddingModelDims) }
             { name: 'MAX_TOOL_ITERATIONS', value: string(maxToolIterations) }
             { name: 'MAX_CHAT_HISTORY_SIZE', value: string(maxChatHistorySize) }
@@ -322,6 +360,7 @@ resource app 'Microsoft.App/containerApps@2024-02-02-preview' = {
     mem0Secret
     redisUrlSecret
     azureOpenAISecret
+    embSmall
   ]
 }
 

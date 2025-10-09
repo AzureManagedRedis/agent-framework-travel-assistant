@@ -7,8 +7,8 @@ dependency checks used by the UI entrypoint.
 import warnings
 warnings.filterwarnings("ignore")
 import os
-from typing import Optional
-from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import Optional, Any
+from pydantic import BaseModel, Field, field_validator, model_validator, AliasChoices, ValidationError
 from pydantic_settings import BaseSettings
 
 
@@ -16,12 +16,26 @@ class AppConfig(BaseSettings):
     """Application configuration with validation."""
     
     # API Keys
-    azure_openai_api_key: str = Field(..., env="AZURE_OPENAI_API_KEY", description="Azure OpenAI API key")
+    azure_openai_api_key: str = Field(
+        ..., 
+        validation_alias=AliasChoices("AZURE_OPENAI_API_KEY", "OPENAI_API_KEY"),
+        description="OpenAI API key"
+    )
     tavily_api_key: str = Field(..., env="TAVILY_API_KEY", description="Tavily API key")
 
-    azure_openai_base_url: str = Field(..., env="AZURE_OPENAI_BASE_URL", description="Azure OpenAI Base URL")
-    azure_openai_api_version: str = Field(default="2024-06-01", env="AZURE_OPENAI_API_VERSION", description="Azure OpenAI API version")
-    azure_openai_endpoint: str = Field(default="", env="AZURE_OPENAI_ENDPOINT", description="Azure OpenAI Endpoint")
+    # Azure OpenAI settings
+    azure_openai_endpoint: str = Field(..., env="AZURE_OPENAI_ENDPOINT", description="Azure OpenAI endpoint URL")
+    azure_openai_api_version: str = Field(
+        default="2024-02-15-preview",
+        validation_alias=AliasChoices("AZURE_OPENAI_API_VERSION", "OPENAI_API_VERSION"),
+        description="Azure OpenAI API version",
+    )
+    # Optional base_url for v1-style clients; computed from endpoint if not provided
+    azure_openai_base_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("AZURE_OPENAI_BASE_URL", "OPENAI_BASE_URL"),
+        description="OpenAI v1 base URL (endpoint + 'openai/v1/')"
+    )
     
     # Model Configuration
     travel_agent_model: str = Field(default="gpt-4.1", env="TRAVEL_AGENT_MODEL", description="OpenAI model name for the travel agent")
@@ -56,21 +70,35 @@ class AppConfig(BaseSettings):
         case_sensitive = False
         extra = "ignore"  # Ignore extra environment variables
     
-    @field_validator("openai_api_key")
-    @classmethod
-    def validate_openai_key(cls, v):
-        """Validate OpenAI API key format."""
-        if not v.startswith("sk-"):
-            raise ValueError("OpenAI API key must start with 'sk-'")
-        return v
-    
-    @model_validator(mode="after")
-    def validate_mem0_requirements(self):  # type: ignore[override]
-        """Ensure MEM0_API_KEY is present when using Mem0 Cloud."""
-        if self.mem0_cloud and not (self.MEM0_API_KEY and self.MEM0_API_KEY.strip()):
-            raise ValueError("MEM0_API_KEY is required when MEM0_CLOUD is true")
-        return self
+    def model_post_init(self, __context: Any) -> None:  # type: ignore[override]
+        try:
+            if not self.azure_openai_base_url and self.azure_openai_endpoint:
+                # Ensure trailing slash on endpoint, then append openai/v1/
+                base = self.azure_openai_endpoint
+                if not base.endswith("/"):
+                    base = base + "/"
+                self.azure_openai_base_url = f"{base}openai/v1/"
+        except Exception:
+            pass
 
+
+_REQUIRED_ENVS = [
+    ("azure_openai_api_key", "AZURE_OPENAI_API_KEY|OPENAI_API_KEY"),
+    ("azure_openai_endpoint", "AZURE_OPENAI_ENDPOINT"),
+    ("azure_openai_api_version", "AZURE_OPENAI_API_VERSION|OPENAI_API_VERSION"),
+    ("tavily_api_key", "TAVILY_API_KEY"),
+    ("MEM0_API_KEY", "MEM0_API_KEY"),
+    ("redis_url", "REDIS_URL"),
+]
+
+# Optional but useful config
+_OPTIONAL_ENVS = [
+    ("azure_openai_base_url", "AZURE_OPENAI_BASE_URL|OPENAI_BASE_URL"),
+    ("travel_agent_model", "TRAVEL_AGENT_MODEL"),
+    ("mem0_model", "MEM0_MODEL"),
+    ("mem0_embedding_model", "MEM0_EMBEDDING_MODEL"),
+    ("mem0_embedding_model_dims", "MEM0_EMBEDDING_MODEL_DIMS"),
+]
 
 
 def get_config() -> AppConfig:
@@ -94,7 +122,7 @@ def validate_dependencies() -> bool:
     # Test OpenAI API
     try:
         
-        client = OpenAI(api_key=config.azure_openai_api_key,
+        client = OpenAI(api_key= config.azure_openai_api_key,
                         base_url = config.azure_openai_base_url)
         # Just test the client creation, not making an actual API call
         print("✅ OpenAI API key configured")

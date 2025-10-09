@@ -261,8 +261,16 @@ class TravelAgent:
         self.config = config
 
         # Set environment variables for SDK clients
-        os.environ["AZURE_OPENAI_API_KEY"] = config.azure_openai_api_key
+        os.environ["OPENAI_API_KEY"] = config.azure_openai_api_key
         os.environ["TAVILY_API_KEY"] = config.tavily_api_key
+        # Azure OpenAI specific
+        os.environ["AZURE_OPENAI_API_KEY"] = config.azure_openai_api_key
+        os.environ["AZURE_OPENAI_ENDPOINT"] = config.azure_openai_endpoint
+        os.environ["AZURE_OPENAI_API_VERSION"] = config.azure_openai_api_version
+        # Also set OpenAI v1 compatibility vars for libraries expecting base_url/version
+        os.environ["OPENAI_API_VERSION"] = config.azure_openai_api_version
+        os.environ["OPENAI_BASE_URL"] = f"{config.azure_openai_endpoint}openai/v1/"
+
         try:
             os.environ["MEM0_API_KEY"] = config.MEM0_API_KEY
         except Exception:
@@ -319,17 +327,15 @@ class TravelAgent:
                 }
             },
             "embedder": {
-                "provider": "openai",
+                "provider": "azure_openai",
                 "config": {
-                    "model": self.config.mem0_embedding_model,
-                    "api_key": self.config.openai_api_key
+                    "model": self.config.mem0_embedding_model
                 }
             },
             "llm": {
-                "provider": "openai",
+                "provider": "azure_openai",
                 "config": {
-                    "model": self.config.mem0_model,
-                    "api_key": self.config.openai_api_key
+                    "model": self.config.mem0_model
                 }
             }
         }
@@ -1352,7 +1358,7 @@ class TravelAgent:
                                         elif isinstance(rc, str):
                                             try:
                                                 data = json.loads(rc)
-                                                if isinstance(data, dict) and data.get("file_path"):
+                                                if isinstance(data, dict):
                                                     file_path = data.get("file_path")
                                             except Exception:
                                                 pass
