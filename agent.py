@@ -310,7 +310,7 @@ class TravelAgent:
             "vector_store": {
                 "provider": "redis",
                 "config": {
-                    "collection_name": "mem0",
+                    "collection_name": f"memory:{user_id}",  # Per-user namespace
                     "embedding_model_dims": self.config.mem0_embedding_model_dims,
                     "redis_url": self.config.redis_url
                 }
