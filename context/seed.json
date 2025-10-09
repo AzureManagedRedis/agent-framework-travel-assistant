@@ -1,5 +1,25 @@
 {
   "user_memories": {
-    "Mark": []
+    "Mark": [],
+    "Shreya": [
+      {
+        "insight": "Shreya is an adventure-seeking, outdoor-loving software product manager who works for Redis."
+      },
+      {
+        "insight": "Shreya likes to fly Delta airlines due to her SkyMiles membership. She is okay any airline, if Delta is not available or inconvenient."
+      },
+      {
+        "insight": "Shreya lives in Atlanta."
+      },
+      {
+        "insight": "Shreya is vegetarian."
+      },
+      {
+        "insight": "Shreya wants quick and concise plans. When traveling for conferences, she wants a very tight schedule. If she can avoid hotel bookings, she will."
+      },
+      {
+        "insight": "Shreya requires lowest logical price flights and hotels. Assume lowest price always wins."
+      }
+    ]
   }
 }
