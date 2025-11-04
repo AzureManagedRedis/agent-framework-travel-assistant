@@ -7,3 +7,4 @@ context/users/*
 memory_bank/*
 assets/calendars/*
 .azure
+.DS_Store
