@@ -19,3 +19,17 @@ dependencies = [
   "agent-framework",
   "ics>=0.7.2",
 ]
+
+[tool.setuptools]
+py-modules = [
+  "agent",
+  "config", 
+  "gradio_app"
+]
+
+# Include non-Python files that are needed
+[tool.setuptools.package-data]
+"*" = [
+  "assets/**/*",
+  "context/**/*"
+]

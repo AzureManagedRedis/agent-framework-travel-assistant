@@ -7,8 +7,8 @@ dependency checks used by the UI entrypoint.
 import warnings
 warnings.filterwarnings("ignore")
 import os
-from typing import Optional
-from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import Optional, Any
+from pydantic import BaseModel, Field, field_validator, model_validator, AliasChoices, ValidationError
 from pydantic_settings import BaseSettings
 
 
@@ -16,14 +16,30 @@ class AppConfig(BaseSettings):
     """Application configuration with validation."""
     
     # API Keys
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY", description="OpenAI API key")
+    azure_openai_api_key: str = Field(
+        ..., 
+        validation_alias=AliasChoices("AZURE_OPENAI_API_KEY", "OPENAI_API_KEY"),
+        description="OpenAI API key"
+    )
     tavily_api_key: str = Field(..., env="TAVILY_API_KEY", description="Tavily API key")
 
+    # Azure OpenAI settings
+    azure_openai_endpoint: str = Field(..., env="AZURE_OPENAI_ENDPOINT", description="Azure OpenAI endpoint URL")
+    azure_openai_api_version: str = Field(...,env="AZURE_OPENAI_API_VERSION", description="Azure OpenAI API version")
+    # Optional base_url for v1-style clients; computed from endpoint if not provided
+    azure_openai_base_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("AZURE_OPENAI_BASE_URL", "OPENAI_BASE_URL"),
+        description="OpenAI v1 base URL (endpoint + 'openai/v1/')"
+    )
+    
+    openai_api_version: str = Field(..., env="OPENAI_API_VERSION", description="OpenAI API version")
+    
     # Model Configuration
     travel_agent_model: str = Field(default="gpt-4.1", env="TRAVEL_AGENT_MODEL", description="OpenAI model name for the travel agent")
     mem0_model: str = Field(default="gpt-4.1-mini", env="MEM0_MODEL", description="OpenAI LLM name for the travel agent memory system")
     mem0_embedding_model: str = Field(default="text-embedding-3-small", env="MEM0_EMBEDDING_MODEL", description="OpenAI embedding model for Mem0 memory system")
-    mem0_embedding_model_dims: int = Field(default=1536, env="MEM0_EMBDDING_MODEL_DIMS", description="Embedding dimensions for OpenAI embedding model")
+    mem0_embedding_model_dims: int = Field(default=1536, env="MEM0_EMBEDDING_MODEL_DIMS", description="Embedding dimensions for OpenAI embedding model")
 
     # Other config
     max_tool_iterations: int = Field(default=8, env="MAX_TOOL_ITERATIONS", description="Maximum tool iterations")
@@ -52,22 +68,27 @@ class AppConfig(BaseSettings):
         case_sensitive = False
         extra = "ignore"  # Ignore extra environment variables
     
-    @field_validator("openai_api_key")
-    @classmethod
-    def validate_openai_key(cls, v):
-        """Validate OpenAI API key format."""
-        if not v.startswith("sk-"):
-            raise ValueError("OpenAI API key must start with 'sk-'")
-        return v
-    
-    @model_validator(mode="after")
-    def validate_mem0_requirements(self):  # type: ignore[override]
-        """Ensure MEM0_API_KEY is present when using Mem0 Cloud."""
-        if self.mem0_cloud and not (self.MEM0_API_KEY and self.MEM0_API_KEY.strip()):
-            raise ValueError("MEM0_API_KEY is required when MEM0_CLOUD is true")
-        return self
+    def model_post_init(self, __context: Any) -> None:  # type: ignore[override]
+        try:
+            # Normalize endpoint if a v1-style base URL was provided via alias
+            if self.azure_openai_endpoint:
+                ep = self.azure_openai_endpoint.strip()
+                # Remove trailing slashes
+                while ep.endswith('/'):
+                    ep = ep[:-1]
+                # If someone passed the v1 base URL here, strip the suffix
+                if ep.lower().endswith('/openai/v1'):
+                    ep = ep[:-len('/openai/v1')]
+                self.azure_openai_endpoint = ep + '/'
 
-
+            # Compute base_url if missing
+            if not self.azure_openai_base_url and self.azure_openai_endpoint:
+                base = self.azure_openai_endpoint
+                if not base.endswith("/"):
+                    base = base + "/"
+                self.azure_openai_base_url = f"{base}openai/v1"
+        except Exception:
+            pass
 
 def get_config() -> AppConfig:
     """Get application configuration with proper error handling."""
@@ -89,7 +110,9 @@ def validate_dependencies() -> bool:
     
     # Test OpenAI API
     try:
-        client = OpenAI(api_key=config.openai_api_key)
+        
+        client = OpenAI(api_key= config.azure_openai_api_key,
+                        base_url = config.azure_openai_base_url)
         # Just test the client creation, not making an actual API call
         print("✅ OpenAI API key configured")
     except Exception as e:

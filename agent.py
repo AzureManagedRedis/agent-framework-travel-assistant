@@ -65,7 +65,7 @@ from ics import Calendar, Event, DisplayAlarm
 from ics.grammar.parse import ContentLine
 
 # Agent Framework imports
-from agent_framework.openai import OpenAIChatClient, OpenAIResponsesClient
+from agent_framework.azure import AzureOpenAIResponsesClient
 from agent_framework import ChatMessage, Role, TextContent
 from agent_framework import FunctionCallContent, FunctionResultContent
 from agent_framework._middleware import agent_middleware, AgentRunContext
@@ -261,8 +261,18 @@ class TravelAgent:
         self.config = config
 
         # Set environment variables for SDK clients
-        os.environ["OPENAI_API_KEY"] = config.openai_api_key
+        os.environ["OPENAI_API_KEY"] = config.azure_openai_api_key
         os.environ["TAVILY_API_KEY"] = config.tavily_api_key
+        
+        # Azure OpenAI specific
+        os.environ["AZURE_OPENAI_API_KEY"] = config.azure_openai_api_key
+        os.environ["AZURE_OPENAI_ENDPOINT"] = config.azure_openai_endpoint
+        os.environ["AZURE_OPENAI_API_VERSION"] = config.azure_openai_api_version
+
+        # Also set OpenAI v1 compatibility vars for libraries expecting base_url/version
+        os.environ["OPENAI_API_VERSION"] = config.openai_api_version
+        os.environ["OPENAI_BASE_URL"] = config.azure_openai_base_url or (config.azure_openai_endpoint.rstrip("/") + "/openai/v1")
+
         try:
             os.environ["MEM0_API_KEY"] = config.MEM0_API_KEY
         except Exception:
@@ -270,9 +280,12 @@ class TravelAgent:
 
         # Initialize shared clients
         self.tavily_client = TavilyClient(api_key=config.tavily_api_key)
-        self.chat_client = OpenAIResponsesClient(
-            model_id=config.travel_agent_model,
-            api_key=config.openai_api_key,
+
+        self.chat_client = AzureOpenAIResponsesClient(
+            endpoint=config.azure_openai_endpoint,
+            deployment_name=config.travel_agent_model,
+            api_version=config.azure_openai_api_version,
+            api_key=config.azure_openai_api_key
         )
 
         # Initialize user context cache
@@ -310,23 +323,21 @@ class TravelAgent:
             "vector_store": {
                 "provider": "redis",
                 "config": {
-                    ""collection_name": "mem0",
+                    "collection_name": "mem0",
                     "embedding_model_dims": self.config.mem0_embedding_model_dims,
                     "redis_url": self.config.redis_url
                 }
             },
             "embedder": {
-                "provider": "openai",
+                "provider": "azure_openai",
                 "config": {
-                    "model": self.config.mem0_embedding_model,
-                    "api_key": self.config.openai_api_key
+                    "model": self.config.mem0_embedding_model
                 }
             },
             "llm": {
-                "provider": "openai",
+                "provider": "azure_openai",
                 "config": {
-                    "model": self.config.mem0_model,
-                    "api_key": self.config.openai_api_key
+                    "model": self.config.mem0_model
                 }
             }
         }
@@ -1349,7 +1360,7 @@ class TravelAgent:
                                         elif isinstance(rc, str):
                                             try:
                                                 data = json.loads(rc)
-                                                if isinstance(data, dict) and data.get("file_path"):
+                                                if isinstance(data, dict):
                                                     file_path = data.get("file_path")
                                             except Exception:
                                                 pass
@@ -1362,8 +1373,7 @@ class TravelAgent:
                     if file_path:
                         yield buffer, {
                             "type": "tool_result",
-                            "html": _html("📅", "generate_calendar_ics finished", "Tool execution completed"),
-                            "tool_name": "generate_calendar_ics",
+                            "tool_name": "generate_calendar_ics" if file_path else "Tool",
                             "file_path": file_path,
                         }
                 except Exception:
@@ -1513,4 +1523,3 @@ class TravelAgent:
         if user_id in self._user_ctx_cache:
             print(f"🗑️  Resetting Mem0 memory for user: {user_id}")
             self._user_ctx_cache.pop(user_id, None)
-    
